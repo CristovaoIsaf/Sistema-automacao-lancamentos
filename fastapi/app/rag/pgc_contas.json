@@ -1,0 +1,25 @@
+{
+  "_fonte": "Decreto n.º 82/01, de 16 de Novembro (Diário da República, I Série n.º 52) — Quadro e Lista de Contas",
+  "_nota": "Whitelist oficial de contas. O document_analyzer.py e o pgc_ao.py NUNCA devem usar um código de conta que não esteja aqui — se precisarem de um novo, é preciso confirmar contra o decreto antes de o adicionar.",
+  "contas": [
+    { "codigo": "21", "nome": "Compras", "classe": "2 - Existências" },
+    { "codigo": "26", "nome": "Mercadorias", "classe": "2 - Existências" },
+    { "codigo": "31", "nome": "Clientes", "classe": "3 - Terceiros" },
+    { "codigo": "32", "nome": "Fornecedores", "classe": "3 - Terceiros" },
+    { "codigo": "43", "nome": "Depósitos à ordem", "classe": "4 - Meios Monetários" },
+    { "codigo": "45", "nome": "Caixa", "classe": "4 - Meios Monetários" },
+    { "codigo": "61", "nome": "Vendas", "classe": "6 - Proveitos e Ganhos por Natureza" },
+    { "codigo": "62", "nome": "Prestações de serviço", "classe": "6 - Proveitos e Ganhos por Natureza" },
+    { "codigo": "75", "nome": "Outros custos e perdas operacionais", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "75.2.11", "nome": "Água", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "75.2.12", "nome": "Electricidade", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "75.2.14", "nome": "Conservação e reparação", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "75.2.20", "nome": "Comunicação", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "75.2.21", "nome": "Rendas e alugueres", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "75.2.22", "nome": "Seguros", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "75.2.23", "nome": "Deslocações e estadas", "classe": "7 - Custos e Perdas por Natureza" },
+    { "codigo": "34.5.1", "nome": "IVA dedutível", "classe": "3 - Terceiros (Estado)", "_nota": "Extensão do projeto (autorizada explicitamente pelo autor do TFC) — não consta literalmente do Decreto 82/01, que é anterior ao IVA em Angola (2019)." },
+    { "codigo": "34.5.2", "nome": "IVA liquidado", "classe": "3 - Terceiros (Estado)", "_nota": "Extensão do projeto (autorizada explicitamente pelo autor do TFC) — não consta literalmente do Decreto 82/01, que é anterior ao IVA em Angola (2019)." },
+    { "codigo": "A_CLASSIFICAR", "nome": "A classificar (revisão manual)", "classe": null }
+  ]
+}

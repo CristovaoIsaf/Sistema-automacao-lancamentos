@@ -1,0 +1,69 @@
+# Blueprint do Render para os 3 serviços web/estático do TFC.
+# A base de dados Postgres fica FORA deste blueprint (ver plano de deploy) —
+# é criada manualmente no dashboard, e DB_URL/DB_USERNAME/DB_PASSWORD são
+# definidas como variáveis simples no serviço do backend depois de existir.
+#
+# Antes de aplicar: confirma no dashboard do Render se a regra de "routes"
+# do frontend (rewrite SPA) ficou mesmo ativa — se não, configura-a
+# manualmente em Redirects/Rewrites (Source: /*, Destination: /index.html,
+# Action: Rewrite).
+
+services:
+  - name: auto-lancamentos-fastapi
+    type: web
+    runtime: docker
+    dockerfilePath: ./fastapi/Dockerfile
+    dockerContext: ./fastapi
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANYTHINGLLM_API_KEY
+        sync: false
+      # Domínio estático do túnel ngrok que expõe o AnythingLLM local.
+      # O túnel (ngrok http --domain=... 3001) tem de ficar sempre a correr
+      # na máquina local, tal como a app do AnythingLLM.
+      - key: ANYTHINGLLM_BASE_URL
+        value: https://swarm-overstock-uncouple.ngrok-free.dev
+      - key: ANYTHINGLLM_WORKSPACE_NORMAS
+        value: workspace-normativo
+      - key: ANYTHINGLLM_WORKSPACE_EXEMPLOS
+        value: regras-do-negocio
+
+  - name: auto-lancamentos-backend
+    type: web
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      # Definidas manualmente no dashboard depois de criar a Postgres
+      # (ver plano de deploy) — não incluídas aqui via fromDatabase para
+      # evitar depender do formato exato da connection string do Render.
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FASTAPI_SERVICES_URL
+        value: https://auto-lancamentos-fastapi.onrender.com/api/v1
+      - key: ALLOWED_ORIGIN
+        value: https://auto-lancamentos-frontend.onrender.com
+
+  - name: auto-lancamentos-frontend
+    type: web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://auto-lancamentos-backend.onrender.com
+    routes:
+      - type: rewrite
+        source: "/<path:*>"
+        destination: /index.html

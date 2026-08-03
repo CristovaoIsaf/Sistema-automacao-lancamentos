@@ -1,0 +1,29 @@
+# FastAPI e servidor
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# OCR
+pytesseract==0.3.13
+Pillow==11.1.0
+pdf2image==1.17.0
+# Poppler para Windows (necessário para PDF, não é pacote pip):
+# https://github.com/oschwartz10612/poppler-windows/releases/
+
+# Pré-processamento de imagem (melhora a precisão do OCR)
+opencv-python-headless==4.10.0.84
+numpy==2.2.1
+
+# Validação e schemas
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# Cliente HTTP para chamar a API do AnythingLLM (RAG)
+httpx==0.28.1
+
+# Google Gemini (SDK unificada atual — substitui a antiga google-generativeai)
+google-genai==1.5.0
+
+# Utilitários
+python-dateutil==2.9.0.post0
