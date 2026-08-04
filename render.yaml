@@ -12,8 +12,9 @@ services:
   - name: auto-lancamentos-fastapi
     type: web
     runtime: docker
-    dockerfilePath: ./fastapi/Dockerfile
-    dockerContext: ./fastapi
+    rootDir: fastapi
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: free
     healthCheckPath: /health
     envVars:
@@ -34,8 +35,9 @@ services:
   - name: auto-lancamentos-backend
     type: web
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: free
     envVars:
       # Definidas manualmente no dashboard depois de criar a Postgres
