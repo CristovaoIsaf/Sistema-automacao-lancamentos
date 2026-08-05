@@ -15,6 +15,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -57,6 +58,9 @@ public class DocumentoController {
      * Upload de um documento (PDF ou imagem). Guarda os bytes no banco.
      * O ficheiro fica pronto para ser analisado via POST /analises com o documentoId devolvido aqui.
      */
+    // RN010: escrita de documentos fica fora do Auditor (só leitura para
+    // esse papel — ver GET /documentos e /documentos/{id}/download).
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CONTABILISTA')")
     @PostMapping(consumes = "multipart/form-data")
     public ResponseEntity<DocumentoContabilistico> upload(
             @RequestParam("file") MultipartFile file,
