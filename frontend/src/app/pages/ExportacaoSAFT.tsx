@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileCode, Download, CheckCircle2, Clock, ShieldCheck, Calendar, AlertCircle } from 'lucide-react';
+import { FileCode, Download, CheckCircle2, Clock, Calendar, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function ExportacaoSAFT() {
@@ -106,7 +106,6 @@ export function ExportacaoSAFT() {
           <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 space-y-3">
             <h2 className="text-[13px] font-semibold text-[#0F172A]">Conformidade</h2>
             {[
-              { icon: ShieldCheck, label: 'Certificado AGT', ok: true },
               { icon: FileCode, label: 'Formato SAF-T AO v1.0', ok: true },
               { icon: CheckCircle2, label: 'Validação PGCA', ok: true },
               { icon: Clock, label: 'Submissão automática AGT', ok: false },

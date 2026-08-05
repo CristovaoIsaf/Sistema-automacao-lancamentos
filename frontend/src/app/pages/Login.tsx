@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { FileText, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { FileText, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../auth/AuthContext';
 
@@ -101,10 +101,6 @@ export function Login() {
 
           {/* Footer card */}
           <div className="mt-6 pt-5 border-t border-[#E2E8F0]">
-            <div className="flex items-center gap-1.5 text-[11px] text-[#94A3B8] justify-center">
-              <ShieldCheck style={{ width: 12, height: 12 }} className="text-[#059669]" />
-              <span>Certificado AGT · Decreto Presidencial n.º 71/25</span>
-            </div>
             <p className="text-[11px] text-[#94A3B8] text-center mt-2">
               Ainda não tem conta?{' '}
               <Link to="/cadastro" className="text-[#2563EB] hover:text-[#1D4ED8] transition-colors">

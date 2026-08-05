@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   LayoutDashboard,
   FileText,
@@ -73,8 +73,12 @@ const menuSections: { label: string; items: MenuItem[] }[] = [
 
 export function Layout() {
   const location = useLocation();
-  const { utilizador, perfil, setPerfil, logout } = useAuth();
+  const { utilizador, perfil, autenticado, setPerfil, logout } = useAuth();
   const navigate = useNavigate();
+
+  if (!autenticado) {
+    return <Navigate to="/login" replace />;
+  }
   const handleLogout = () => { logout(); navigate('/login'); };
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);

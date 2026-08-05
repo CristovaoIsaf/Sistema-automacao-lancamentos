@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { FileText, ShieldCheck } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Cadastro() {
@@ -74,10 +74,6 @@ export function Cadastro() {
           </form>
 
           <div className="mt-5 pt-4 border-t border-[#E2E8F0]">
-            <div className="flex items-center gap-1.5 text-[11px] text-[#94A3B8] justify-center">
-              <ShieldCheck style={{ width: 12, height: 12 }} className="text-[#059669]" />
-              <span>Certificado AGT · PGCA (Decreto n.º 82/01)</span>
-            </div>
             <p className="text-[11px] text-[#94A3B8] text-center mt-2">
               Já tem conta?{' '}
               <Link to="/login" className="text-[#2563EB] hover:text-[#1D4ED8] transition-colors">

@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   TrendingUp, TrendingDown, AlertCircle,
-  CheckCircle2, ChevronRight, Eye, Edit2,
+  ChevronRight, Eye, Edit2,
+  FileStack, Sparkles, CheckCircle2, Target,
 } from 'lucide-react';
 import {
   lancamentosMock, formatarKwanza, dadosGraficoMensal,
 } from '../data/mockData';
 import { obterDashboard } from '../api/dashboardApi';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
@@ -57,19 +58,40 @@ function Badge({ variant, children }: { variant: Estado | Origem; children: Reac
   );
 }
 
-function KpiCard({ label, value, sub, trend, trendUp }: {
+type AcentoKpi = 'info' | 'ai' | 'success' | 'neutral';
+
+const ACENTO_KPI: Record<AcentoKpi, { bar: string; iconBg: string; iconColor: string }> = {
+  info: { bar: '#2563EB', iconBg: '#EFF6FF', iconColor: '#2563EB' },
+  ai: { bar: '#7C3AED', iconBg: '#F5F3FF', iconColor: '#7C3AED' },
+  success: { bar: '#059669', iconBg: '#ECFDF5', iconColor: '#059669' },
+  neutral: { bar: '#94A3B8', iconBg: '#F8FAFC', iconColor: '#64748B' },
+};
+
+function KpiCard({ label, value, sub, trend, trendUp, icon: Icon, acento = 'neutral' }: {
   label: string;
   value: string;
   sub?: string;
   trend?: string;
   trendUp?: boolean;
+  icon: React.ElementType;
+  acento?: AcentoKpi;
 }) {
+  const cores = ACENTO_KPI[acento];
   return (
-    <div className="bg-white border border-[#E2E8F0] rounded-lg p-4">
-      <p className="text-[12px] font-medium text-[#475569] mb-2">{label}</p>
-      <p className="text-[24px] font-bold text-[#0F172A] leading-none mb-2">{value}</p>
+    <div className="group relative bg-white border border-[#E2E8F0] rounded-lg p-4 overflow-hidden transition-shadow hover:shadow-[0_4px_16px_-4px_rgba(15,23,42,0.08)]">
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: cores.bar }} />
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-[12px] font-medium text-[#475569]">{label}</p>
+        <div
+          className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+          style={{ backgroundColor: cores.iconBg }}
+        >
+          <Icon style={{ width: 14, height: 14, color: cores.iconColor }} />
+        </div>
+      </div>
+      <p className="text-[26px] font-bold text-[#0F172A] leading-none mb-2 tabular-nums">{value}</p>
       {trend && (
-        <div className={`flex items-center gap-1 text-[12px] ${trendUp ? 'text-[#059669]' : 'text-[#DC2626]'}`}>
+        <div className={`flex items-center gap-1 text-[12px] font-medium ${trendUp ? 'text-[#059669]' : 'text-[#DC2626]'}`}>
           {trendUp ? <TrendingUp style={{ width: 12, height: 12 }} /> : <TrendingDown style={{ width: 12, height: 12 }} />}
           <span>{trend}</span>
         </div>
@@ -166,16 +188,15 @@ export function Dashboard() {
 
       {/* Cabeçalho da página */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[18px] font-semibold text-[#0F172A]">Dashboard</h1>
-          <p className="text-[13px] text-[#475569] mt-0.5">Visão geral · Julho 2026</p>
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-9 rounded-full bg-[#2563EB]" />
+          <div>
+            <h1 className="text-[19px] font-semibold text-[#0F172A] tracking-tight">Dashboard</h1>
+            <p className="text-[13px] text-[#475569] mt-0.5">Visão geral · Julho 2026</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-[#ECFDF5] text-[#059669] px-2.5 py-1 rounded-md text-[11px] font-medium">
-            <CheckCircle2 style={{ width: 12, height: 12 }} />
-            Software certificado AGT
-          </div>
-          <div className="flex items-center gap-1.5 bg-[#FEF2F2] text-[#DC2626] px-2.5 py-1 rounded-md text-[11px] font-medium">
+          <div className="flex items-center gap-1.5 bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] px-2.5 py-1.5 rounded-md text-[11px] font-medium">
             <AlertCircle style={{ width: 12, height: 12 }} />
             5 faturas · prazo excedido · PD 71/25
           </div>
@@ -191,29 +212,37 @@ export function Dashboard() {
       )}
 
       {/* KPIs — agora ligados ao estado real, não a valores fixos */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           label="Documentos importados hoje"
           value={String(kpis.documentosImportados)}
           trend="+4 vs ontem"
           trendUp
+          icon={FileStack}
+          acento="info"
         />
         <KpiCard
           label="Sugestões IA pendentes"
           value={String(kpis.sugestoesPendentes)}
           sub="aguardam validação"
+          icon={Sparkles}
+          acento="ai"
         />
         <KpiCard
           label="Lançamentos aprovados (mês)"
           value={String(kpis.lancamentosAprovados)}
           trend="+12% vs mês ant."
           trendUp
+          icon={CheckCircle2}
+          acento="success"
         />
         <KpiCard
           label="Taxa de acerto IA"
           value={`${kpis.precisaoIA.toFixed(1).replace('.', ',')}%`}
           trend="+0,8 pp vs mês ant."
           trendUp
+          icon={Target}
+          acento="success"
         />
       </div>
 
@@ -301,10 +330,30 @@ export function Dashboard() {
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-4">
-          <h2 className="text-[14px] font-semibold text-[#0F172A] mb-4">Receitas vs Despesas</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[14px] font-semibold text-[#0F172A]">Receitas vs Despesas</h2>
+            <div className="flex items-center gap-3 text-[11px] text-[#475569]">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#059669]" /> Receitas
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#DC2626]" /> Despesas
+              </span>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData} margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="corReceitas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#059669" stopOpacity={0.18} />
+                  <stop offset="100%" stopColor="#059669" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="corDespesas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#DC2626" stopOpacity={0.14} />
+                  <stop offset="100%" stopColor="#DC2626" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
               <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
               <YAxis
                 tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`}
@@ -314,11 +363,11 @@ export function Dashboard() {
               />
               <Tooltip
                 formatter={(v: number) => formatarKwanza(v)}
-                contentStyle={{ fontSize: 12, border: '1px solid #E2E8F0', borderRadius: 6, boxShadow: 'none' }}
+                contentStyle={{ fontSize: 12, border: '1px solid #E2E8F0', borderRadius: 8, boxShadow: '0 4px 16px -4px rgba(15,23,42,0.12)' }}
               />
-              <Line type="monotone" dataKey="receitas" stroke="#059669" strokeWidth={1.5} dot={false} name="Receitas" />
-              <Line type="monotone" dataKey="despesas" stroke="#DC2626" strokeWidth={1.5} dot={false} name="Despesas" />
-            </LineChart>
+              <Area type="monotone" dataKey="receitas" stroke="#059669" strokeWidth={2} fill="url(#corReceitas)" name="Receitas" />
+              <Area type="monotone" dataKey="despesas" stroke="#DC2626" strokeWidth={2} fill="url(#corDespesas)" name="Despesas" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
 
