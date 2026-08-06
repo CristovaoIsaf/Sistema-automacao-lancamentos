@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid, History } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
-import { criarLancamento } from '../api/lancamentoApi';
+import { criarLancamento, listarLancamentos } from '../api/lancamentoApi';
 import { listarContas } from '../api/contaApi';
 import { listarCategoriasConta } from '../api/categoriaContaApi';
 import type { CategoriaConta, ContaResumo } from '../types/categoriaConta';
+import type { LancamentoResponse } from '../types/lancamento';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -28,6 +29,16 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 
 const novaLinha = (): Linha => ({ id: crypto.randomUUID(), conta: '', descricao: '', debito: '', credito: '' });
 
+function valorTotalLancamento(l: LancamentoResponse): number {
+  return l.linhas.reduce((soma, linha) => soma + Number(linha.debito ?? 0), 0);
+}
+
+const ESTADO_BADGE: Record<string, { classe: string; label: string }> = {
+  VALIDADO: { classe: 'bg-[#ECFDF5] text-[#059669]', label: 'Validado' },
+  PENDENTE: { classe: 'bg-[#FFFBEB] text-[#D97706]', label: 'Pendente' },
+  CANCELADO: { classe: 'bg-[#FEF2F2] text-[#DC2626]', label: 'Cancelado' },
+};
+
 // Taxas de IVA em vigor em Angola: 14% (taxa geral) e 7% (taxa reduzida,
 // bens de primeira necessidade) — ver services/pgc.py (TAXA_IVA) no lado
 // da classificação automática, que hoje só aplica a taxa geral. Aqui, no
@@ -46,6 +57,28 @@ export function LancamentoDiario() {
   const [contas, setContas] = useState<ContaSimples[]>([]);
   const [categorias, setCategorias] = useState<CategoriaConta[]>([]);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
+  const [historicoRecente, setHistoricoRecente] = useState<LancamentoResponse[]>([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(true);
+
+  // Histórico dos últimos lançamentos manuais registados nesta página —
+  // recarregado sempre que um novo lançamento é guardado com sucesso, para
+  // que a lista fique sempre actualizada sem precisar de navegar até
+  // "Lançamentos".
+  const carregarHistorico = async () => {
+    try {
+      setCarregandoHistorico(true);
+      const dados = await listarLancamentos();
+      const manuais = dados
+        .filter(l => l.origem === 'MANUAL')
+        .sort((a, b) => b.id - a.id)
+        .slice(0, 5);
+      setHistoricoRecente(manuais);
+    } catch (err) {
+      console.error('Erro ao carregar histórico de lançamentos:', err);
+    } finally {
+      setCarregandoHistorico(false);
+    }
+  };
 
   useEffect(() => {
     listarContas()
@@ -60,6 +93,8 @@ export function LancamentoDiario() {
       .catch(err => console.error('Erro ao carregar categorias de conta:', err));
     // Falha a carregar categorias não é bloqueante — a pesquisa global de
     // contas (sem agrupamento) continua disponível.
+
+    carregarHistorico();
   }, []);
 
   const categoriaAtual = categorias.find(c => c.nome === categoriaSelecionada);
@@ -150,6 +185,7 @@ export function LancamentoDiario() {
       setNfDoc('');
       setNif('');
       setHistorico('');
+      await carregarHistorico();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao registar lançamento');
     } finally {
@@ -384,6 +420,61 @@ export function LancamentoDiario() {
           >
             Limpar
           </button>
+        </div>
+      </div>
+
+      {/* Histórico recente — actualizado automaticamente a seguir a cada
+          novo registo manual, sem precisar de navegar até "Lançamentos". */}
+      <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#E2E8F0] flex items-center gap-2">
+          <History style={{ width: 14, height: 14 }} className="text-[#475569]" />
+          <h2 className="text-[13px] font-semibold text-[#0F172A]">Histórico recente</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                {['Data', 'Histórico', 'Valor (AOA)', 'Estado'].map(h => (
+                  <th key={h} className={`px-3 py-2 text-[11px] font-medium text-[#475569] uppercase tracking-wide ${h === 'Valor (AOA)' ? 'text-right' : 'text-left'}`}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {carregandoHistorico ? (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-[13px] text-[#94A3B8]">
+                    <Loader2 className="animate-spin inline-block mr-2" size={13} /> A carregar...
+                  </td>
+                </tr>
+              ) : historicoRecente.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-[13px] text-[#94A3B8]">
+                    Ainda não há lançamentos manuais registados.
+                  </td>
+                </tr>
+              ) : historicoRecente.map(l => {
+                const estadoInfo = ESTADO_BADGE[l.estado] ?? { classe: 'bg-[#F1F5F9] text-[#475569]', label: l.estado };
+                return (
+                  <tr key={l.id} className="border-b border-[#F1F5F9] last:border-0">
+                    <td className="px-3 py-2 text-[13px] text-[#475569] whitespace-nowrap">
+                      {new Date(l.data).toLocaleDateString('pt-AO')}
+                    </td>
+                    <td className="px-3 py-2 text-[13px] text-[#475569] max-w-[280px] truncate">{l.descricao}</td>
+                    <td className="px-3 py-2 text-[13px] font-medium text-[#0F172A] text-right whitespace-nowrap" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                      {formatarKwanza(valorTotalLancamento(l))}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${estadoInfo.classe}`}>
+                        {estadoInfo.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
