@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent } from 'lucide-react';
-import { formatarKwanza, planoContasAngolano } from '../data/mockData';
+import { formatarKwanza } from '../data/mockData';
 import { criarLancamento } from '../api/lancamentoApi';
+import { listarContas } from '../api/contaApi';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -12,7 +13,17 @@ interface Linha {
   credito: string;
 }
 
-const contas = planoContasAngolano.filter(c => c.nivel === 3);
+// Plano de contas real do PGC-AO (Decreto n.º 82/01), o mesmo usado pela
+// classificação automática (services/pgc.py) — antes esta página usava um
+// plano de contas genérico de exemplo (mockData.planoContasAngolano), com
+// numeração diferente da que os lançamentos reais realmente usam (ex. sem
+// as contas de IVA 34.5.1/34.5.2, ou as sub-contas de FSE como Água/
+// Electricidade), o que na prática impedia registar um lançamento com
+// linhas para essas contas.
+interface ContaSimples {
+  codigo: string;
+  nome: string;
+}
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -33,6 +44,16 @@ export function LancamentoDiario() {
   const [historico, setHistorico] = useState('');
   const [linhas, setLinhas] = useState<Linha[]>([novaLinha(), novaLinha()]);
   const [aGuardar, setAGuardar] = useState(false);
+  const [contas, setContas] = useState<ContaSimples[]>([]);
+
+  useEffect(() => {
+    listarContas()
+      .then(dados => setContas(dados as unknown as ContaSimples[]))
+      .catch(err => {
+        console.error('Erro ao carregar plano de contas:', err);
+        toast.error('Não foi possível carregar o plano de contas');
+      });
+  }, []);
 
   // Assistente de IVA — só calcula e acrescenta uma linha às já existentes,
   // não substitui a edição manual das restantes.
@@ -227,9 +248,7 @@ export function LancamentoDiario() {
                       style={{ fontFamily: 'JetBrains Mono, monospace' }}
                     >
                       <option value="">Seleccionar conta</option>
-                      {linha.conta === '34.5.1' && <option value="34.5.1">34.5.1 — IVA dedutível</option>}
-                      {linha.conta === '34.5.2' && <option value="34.5.2">34.5.2 — IVA liquidado</option>}
-                      {contas.map(c => <option key={c.id} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+                      {contas.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
                     </select>
                   </td>
                   <td className="px-3 py-2">
