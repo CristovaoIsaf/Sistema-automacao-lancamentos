@@ -30,4 +30,8 @@ public class AnaliseResponse {
     // Trechos do Decreto 82/01 usados pelo RAG para fundamentar a classificação
     // (vazio quando a classificação veio do fallback por regras).
     private String fundamentacao;
+
+    // Categoria do plano de contas (ver CategoriaContaController) inferida
+    // a partir do tipoDocumento — ver pgc_ao.categoria_do_tipo no FastAPI.
+    private String categoria;
 }

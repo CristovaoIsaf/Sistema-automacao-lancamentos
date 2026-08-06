@@ -185,7 +185,10 @@ export function UploadDocumentos() {
             {analise ? (
               <div className="space-y-2 text-sm text-[#475569]">
                 <div><span className="font-semibold text-[#0F172A]">Tipo:</span> {analise.tipoDocumento}</div>
-                <div><span className="font-semibold text-[#0F172A]">Categoria:</span> {analise.categoriaContabil}</div>
+                {analise.categoria && (
+                  <div><span className="font-semibold text-[#0F172A]">Categoria:</span> {analise.categoria}</div>
+                )}
+                <div><span className="font-semibold text-[#0F172A]">Conta principal:</span> {analise.categoriaContabil}</div>
                 <div><span className="font-semibold text-[#0F172A]">Valor:</span> {analise.valor}</div>
                 <div><span className="font-semibold text-[#0F172A]">Descrição:</span> {analise.descricao}</div>
                 <div><span className="font-semibold text-[#0F172A]">Estado:</span> {analise.estado}</div>

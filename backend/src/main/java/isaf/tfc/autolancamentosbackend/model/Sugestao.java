@@ -30,6 +30,12 @@ public class Sugestao {
     @Column(name = "categoria_contabil")
     private String categoriaContabil;
 
+    // Categoria do plano de contas (Vendas/Compras/... — ver
+    // CategoriaContaController), inferida a partir do tipoDocumento pelo
+    // FastAPI (pgc_ao.categoria_do_tipo). Aditivo — sugestões antigas ficam
+    // com este campo a null, o frontend já trata isso como "sem categoria".
+    private String categoria;
+
     // Valor devolvido pelo Gemini em formato texto (ex: "150.000,00 Kz")
     private String valor;
 

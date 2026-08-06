@@ -86,6 +86,32 @@ TIPOS_VALIDOS = {
 }
 
 
+# Categoria por tipo de documento (camada de organização sobre o mesmo
+# plano de contas real acima — não altera nenhuma conta nem a lógica de
+# construir_lancamento, só rotula o tipo já classificado com uma categoria
+# legível, para a interface poder mostrar "Categoria: Vendas" na revisão de
+# uma sugestão da IA). Mesmos nomes de categoria usados no lado Java em
+# CategoriaContaController — mantidos sincronizados manualmente, tal como
+# as próprias contas já são espelhadas entre os dois lados.
+CATEGORIA_POR_TIPO = {
+    TIPO_VENDA_MERCADORIA: "Vendas",
+    TIPO_PRESTACAO_SERVICO: "Vendas",
+    TIPO_COMPRA_MERCADORIA: "Compras",
+    TIPO_COMPRA_SERVICO: "Operações Diversas",
+    TIPO_PAGAMENTO_FORNECEDOR: "Tesouraria",
+    TIPO_RECEBIMENTO_CLIENTE: "Tesouraria",
+    TIPO_A_CLASSIFICAR: "Operações Diversas",
+}
+
+
+def categoria_do_tipo(tipo: str) -> str:
+    """Categoria (ver CATEGORIA_POR_TIPO) para o tipo de documento já
+    classificado — "Operações Diversas" por omissão para um tipo
+    desconhecido, nunca uma excepção (isto é só um rótulo informativo,
+    nunca deve impedir a construção do lançamento)."""
+    return CATEGORIA_POR_TIPO.get(tipo, "Operações Diversas")
+
+
 def _normalizar_numero(valor: str) -> str:
     """
     Normaliza um número em texto para o formato que o Decimal entende

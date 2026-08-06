@@ -64,6 +64,7 @@ public class AnaliseContabilService {
         sugestao.setTextoOriginal(analise.getTextoOcr());
         sugestao.setLinhasJson(serializarLinhas(analise.getLinhas()));
         sugestao.setFundamentacao(analise.getFundamentacao());
+        sugestao.setCategoria(analise.getCategoria());
         sugestao.setEstado(EstadoSugestao.PENDENTE);
 
         Sugestao salva = sugestaoRepository.save(sugestao);

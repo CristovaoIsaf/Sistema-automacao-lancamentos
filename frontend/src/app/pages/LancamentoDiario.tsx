@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
 import { criarLancamento } from '../api/lancamentoApi';
 import { listarContas } from '../api/contaApi';
+import { listarCategoriasConta } from '../api/categoriaContaApi';
+import type { CategoriaConta, ContaResumo } from '../types/categoriaConta';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -20,10 +22,7 @@ interface Linha {
 // as contas de IVA 34.5.1/34.5.2, ou as sub-contas de FSE como Água/
 // Electricidade), o que na prática impedia registar um lançamento com
 // linhas para essas contas.
-interface ContaSimples {
-  codigo: string;
-  nome: string;
-}
+type ContaSimples = ContaResumo;
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -45,6 +44,8 @@ export function LancamentoDiario() {
   const [linhas, setLinhas] = useState<Linha[]>([novaLinha(), novaLinha()]);
   const [aGuardar, setAGuardar] = useState(false);
   const [contas, setContas] = useState<ContaSimples[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaConta[]>([]);
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
 
   useEffect(() => {
     listarContas()
@@ -53,7 +54,34 @@ export function LancamentoDiario() {
         console.error('Erro ao carregar plano de contas:', err);
         toast.error('Não foi possível carregar o plano de contas');
       });
+
+    listarCategoriasConta()
+      .then(setCategorias)
+      .catch(err => console.error('Erro ao carregar categorias de conta:', err));
+    // Falha a carregar categorias não é bloqueante — a pesquisa global de
+    // contas (sem agrupamento) continua disponível.
   }, []);
+
+  const categoriaAtual = categorias.find(c => c.nome === categoriaSelecionada);
+
+  // Grupos para o <select> de cada linha: com categoria escolhida,
+  // Principais/Ocasionais primeiro, depois "Outras contas" com o resto do
+  // plano — nenhuma conta fica escondida, só reordenada visualmente.
+  const gruposDeConta = useMemo(() => {
+    if (!categoriaAtual) {
+      return [{ titulo: '', contas }];
+    }
+    const codigosUsados = new Set([
+      ...categoriaAtual.principais.map(c => c.codigo),
+      ...categoriaAtual.ocasionais.map(c => c.codigo),
+    ]);
+    const outras = contas.filter(c => !codigosUsados.has(c.codigo));
+    return [
+      { titulo: 'Principais', contas: categoriaAtual.principais },
+      { titulo: 'Ocasionais', contas: categoriaAtual.ocasionais },
+      { titulo: 'Outras contas', contas: outras },
+    ].filter(g => g.contas.length > 0);
+  }, [categoriaAtual, contas]);
 
   // Assistente de IVA — só calcula e acrescenta uma linha às já existentes,
   // não substitui a edição manual das restantes.
@@ -175,6 +203,29 @@ export function LancamentoDiario() {
         </div>
       </div>
 
+      {/* Categoria — filtra/agrupa as contas mostradas nas linhas abaixo;
+          a pesquisa pelo plano de contas completo continua sempre disponível
+          em "Outras contas". */}
+      <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#E2E8F0] flex items-center gap-2">
+          <LayoutGrid style={{ width: 14, height: 14 }} className="text-[#2563EB]" />
+          <h2 className="text-[13px] font-semibold text-[#0F172A]">Categoria da operação</h2>
+        </div>
+        <div className="p-4">
+          <select
+            value={categoriaSelecionada}
+            onChange={e => setCategoriaSelecionada(e.target.value)}
+            className="w-full sm:w-64 h-8 px-2 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all"
+          >
+            <option value="">Todas as contas (sem filtro)</option>
+            {categorias.map(c => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
+          </select>
+          <p className="text-[11px] text-[#94A3B8] mt-1.5">
+            Escolhe uma categoria para veres primeiro as contas mais usadas nesse tipo de operação.
+          </p>
+        </div>
+      </div>
+
       {/* Assistente de IVA */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-[#E2E8F0] flex items-center gap-2">
@@ -248,7 +299,13 @@ export function LancamentoDiario() {
                       style={{ fontFamily: 'JetBrains Mono, monospace' }}
                     >
                       <option value="">Seleccionar conta</option>
-                      {contas.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+                      {gruposDeConta.map(grupo => grupo.titulo ? (
+                        <optgroup key={grupo.titulo} label={grupo.titulo}>
+                          {grupo.contas.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+                        </optgroup>
+                      ) : (
+                        grupo.contas.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)
+                      ))}
                     </select>
                   </td>
                   <td className="px-3 py-2">

@@ -55,4 +55,19 @@ public class ContaController {
     public ResponseEntity<List<ContaDTO>> listar() {
         return ResponseEntity.ok(CONTAS);
     }
+
+    /**
+     * Devolve a ContaDTO real para um código do plano de contas — usado por
+     * CategoriaContaController para nunca duplicar nome/código de conta.
+     * Lança se o código não existir (falha alto e cedo: uma categoria a
+     * referenciar um código inexistente é um erro de configuração, não um
+     * caso a tratar em runtime).
+     */
+    public static ContaDTO porCodigo(String codigo) {
+        return CONTAS.stream()
+                .filter(c -> c.getCodigo().equals(codigo))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Código de conta '" + codigo + "' referenciado numa categoria não existe em ContaController.CONTAS"));
+    }
 }

@@ -81,6 +81,7 @@ class DocumentAnalyzer:
             "confianca": c.get("confianca", 70),
             "modelo": c.get("modelo", "regras"),
             "fundamentacao": c.get("fundamentacao", ""),
+            "categoria": pgc_ao.categoria_do_tipo(tipo),
             "linhas": linhas,
         }
 

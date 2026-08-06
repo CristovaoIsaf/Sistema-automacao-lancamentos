@@ -23,6 +23,7 @@ export interface Sugestao {
   id: number;
   tipoDocumento: string;
   categoriaContabil: string;
+  categoria?: string | null;
   valor: string;
   descricao: string;
   estado: string;
