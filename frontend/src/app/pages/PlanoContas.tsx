@@ -1,120 +1,87 @@
-import { useState } from 'react';
-import { ChevronRight, ChevronDown, Plus, Search, ToggleLeft, ToggleRight, Edit2 } from 'lucide-react';
-import { planoContasAngolano } from '../data/mockData';
-import { Conta } from '../types/contabilidade';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Search, Loader2 } from 'lucide-react';
+import { listarContas } from '../api/contaApi';
+import { listarCategoriasConta } from '../api/categoriaContaApi';
+import type { CategoriaConta, ContaResumo } from '../types/categoriaConta';
 
-function NaturezaBadge({ natureza }: { natureza: string }) {
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
-      natureza === 'DEVEDORA' ? 'bg-[#EFF6FF] text-[#2563EB]' : 'bg-[#F5F3FF] text-[#7C3AED]'
-    }`}>
-      {natureza}
-    </span>
-  );
-}
-
-function TipoBadge({ tipo }: { tipo: string }) {
-  const styles: Record<string, string> = {
-    ATIVO:              'bg-[#ECFDF5] text-[#059669]',
-    PASSIVO:            'bg-[#FEF2F2] text-[#DC2626]',
-    RECEITA:            'bg-[#EFF6FF] text-[#2563EB]',
-    DESPESA:            'bg-[#FFFBEB] text-[#D97706]',
-    PATRIMONIO_LIQUIDO: 'bg-[#F5F3FF] text-[#7C3AED]',
-  };
-  const labels: Record<string, string> = {
-    ATIVO: 'Ativo', PASSIVO: 'Passivo', RECEITA: 'Receita', DESPESA: 'Despesa', PATRIMONIO_LIQUIDO: 'Patr. Líq.',
-  };
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${styles[tipo] ?? 'bg-[#F1F5F9] text-[#64748B]'}`}>
-      {labels[tipo] ?? tipo}
-    </span>
-  );
-}
-
+// Plano de contas real do PGC-AO (Decreto n.º 82/01) — as mesmas 18 contas
+// usadas pelos lançamentos manual e automático (ver ContaController.CONTAS
+// no backend). Antes esta página mostrava um plano de contas genérico de
+// exemplo (mockData.planoContasAngolano, numeração 1=Ativo/2=Passivo/...),
+// diferente da classificação real do Decreto 82/01 que os lançamentos
+// realmente usam — por isso foi substituída por dados reais da API.
 export function PlanoContas() {
-  const classes = planoContasAngolano.filter(c => c.nivel === 1);
-  const [selectedClass, setSelectedClass] = useState<string>('1');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['1', '1.1', '2', '3', '4', '5']));
+  const [contas, setContas] = useState<ContaResumo[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaConta[]>([]);
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
   const [search, setSearch] = useState('');
+  const [carregando, setCarregando] = useState(true);
 
-  const toggle = (id: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
+  useEffect(() => {
+    Promise.all([listarContas(), listarCategoriasConta()])
+      .then(([dadosContas, dadosCategorias]) => {
+        setContas(dadosContas as unknown as ContaResumo[]);
+        setCategorias(dadosCategorias);
+      })
+      .catch(err => console.error('Erro ao carregar plano de contas:', err))
+      .finally(() => setCarregando(false));
+  }, []);
 
-  const getChildren = (parentId: string) =>
-    planoContasAngolano.filter(c => c.contaPai === parentId);
+  const categoriaAtual = categorias.find(c => c.nome === categoriaSelecionada);
 
-  // Flat list of all accounts in selected class
-  const getAll = (rootId: string): Conta[] => {
-    const result: Conta[] = [];
-    const root = planoContasAngolano.find(c => c.id === rootId);
-    if (!root) return result;
-    const recurse = (id: string) => {
-      planoContasAngolano.filter(c => c.contaPai === id).forEach(c => {
-        result.push(c);
-        recurse(c.id);
-      });
-    };
-    recurse(rootId);
-    return result;
-  };
+  // Sem pesquisa: mostra a categoria escolhida (Principais/Ocasionais) ou
+  // todas as contas. Com pesquisa: procura sempre no plano de contas
+  // completo, independentemente da categoria seleccionada.
+  const grupos = useMemo(() => {
+    if (search) {
+      const termo = search.toLowerCase();
+      const encontradas = contas.filter(c =>
+        c.codigo.toLowerCase().includes(termo) || c.nome.toLowerCase().includes(termo));
+      return [{ titulo: '', contas: encontradas }];
+    }
+    if (!categoriaAtual) {
+      return [{ titulo: '', contas }];
+    }
+    return [
+      { titulo: 'Principais', contas: categoriaAtual.principais },
+      { titulo: 'Ocasionais', contas: categoriaAtual.ocasionais },
+    ].filter(g => g.contas.length > 0);
+  }, [search, categoriaAtual, contas]);
 
-  const allInClass = getAll(selectedClass);
-  const filtered = search
-    ? planoContasAngolano.filter(c => c.nivel > 1 && (
-        c.codigo.includes(search) ||
-        c.nome.toLowerCase().includes(search.toLowerCase())
-      ))
-    : allInClass;
-
-  const selectedClassData = classes.find(c => c.id === selectedClass);
+  const totalContas = grupos.reduce((soma, g) => soma + g.contas.length, 0);
 
   return (
     <div className="max-w-[1200px] space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-1.5 text-[12px] text-[#475569] mb-1">
-            <span>Administrador</span>
-            <span className="text-[#CBD5E1]">&gt;</span>
-            <span>Plano de Contas</span>
-            {selectedClassData && (
-              <>
-                <span className="text-[#CBD5E1]">&gt;</span>
-                <span className="text-[#0F172A] font-medium">Classe {selectedClass} — {selectedClassData.nome}</span>
-              </>
-            )}
-          </div>
-          <h1 className="text-[18px] font-semibold text-[#0F172A]">Plano de Contas</h1>
-          <p className="text-[13px] text-[#475569] mt-0.5">PGCA · Decreto n.º 82/01</p>
-        </div>
-        <button className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[13px] font-medium rounded-md transition-colors">
-          <Plus style={{ width: 13, height: 13 }} /> Nova Conta
-        </button>
+      <div>
+        <h1 className="text-[18px] font-semibold text-[#0F172A]">Plano de Contas</h1>
+        <p className="text-[13px] text-[#475569] mt-0.5">PGCA · Decreto n.º 82/01</p>
       </div>
 
       <div className="flex gap-4">
-
-        {/* ── Árvore de classes ── */}
+        {/* ── Categorias ── */}
         <div className="w-52 flex-shrink-0 bg-white border border-[#E2E8F0] rounded-lg overflow-hidden self-start">
           <div className="px-3 py-2.5 border-b border-[#E2E8F0]">
-            <p className="text-[11px] font-medium text-[#475569] uppercase tracking-wide">Classes PGCA</p>
+            <p className="text-[11px] font-medium text-[#475569] uppercase tracking-wide">Categorias</p>
           </div>
           <div className="py-1">
-            {classes.map(cls => (
+            <button
+              onClick={() => { setCategoriaSelecionada(''); setSearch(''); }}
+              className={`w-full text-left px-3 py-2 text-[12px] transition-colors ${
+                categoriaSelecionada === '' ? 'bg-[#EFF6FF] text-[#2563EB] font-medium' : 'text-[#475569] hover:bg-[#F8FAFC]'
+              }`}
+            >
+              Todas as contas
+            </button>
+            {categorias.map(cat => (
               <button
-                key={cls.id}
-                onClick={() => { setSelectedClass(cls.id); setSearch(''); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
-                  selectedClass === cls.id ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-[#475569] hover:bg-[#F8FAFC]'
+                key={cat.nome}
+                onClick={() => { setCategoriaSelecionada(cat.nome); setSearch(''); }}
+                className={`w-full text-left px-3 py-2 text-[12px] transition-colors ${
+                  categoriaSelecionada === cat.nome ? 'bg-[#EFF6FF] text-[#2563EB] font-medium' : 'text-[#475569] hover:bg-[#F8FAFC]'
                 }`}
               >
-                <span className="text-[12px] font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{cls.codigo}</span>
-                <span className="text-[12px] truncate">{cls.nome}</span>
+                {cat.nome}
               </button>
             ))}
           </div>
@@ -122,7 +89,6 @@ export function PlanoContas() {
 
         {/* ── Tabela de contas ── */}
         <div className="flex-1 min-w-0 space-y-3">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" style={{ width: 13, height: 13 }} />
             <input
@@ -137,47 +103,49 @@ export function PlanoContas() {
             <table className="w-full">
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                  {['Código', 'Designação', 'Natureza', 'Tipo', 'Estado', 'Acções'].map(h => (
-                    <th key={h} className={`px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wide text-left`}>
+                  {['Código', 'Designação'].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wide text-left">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {carregando ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                    <td colSpan={2} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                      <Loader2 className="animate-spin inline-block mr-2" size={14} /> A carregar...
+                    </td>
+                  </tr>
+                ) : totalContas === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
                       Nenhuma conta encontrada
                     </td>
                   </tr>
-                ) : filtered.map(conta => (
-                  <tr key={conta.id} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
-                    <td className="px-4 py-2.5 text-[13px] font-medium text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace', paddingLeft: conta.nivel > 2 ? `${(conta.nivel - 1) * 16 + 16}px` : undefined }}>
-                      {conta.codigo}
-                    </td>
-                    <td className="px-4 py-2.5 text-[13px] text-[#0F172A]">{conta.nome}</td>
-                    <td className="px-4 py-2.5"><NaturezaBadge natureza={conta.natureza} /></td>
-                    <td className="px-4 py-2.5"><TipoBadge tipo={conta.tipo} /></td>
-                    <td className="px-4 py-2.5">
-                      <button className={`flex items-center gap-1 text-[11px] font-medium transition-colors ${conta.ativa ? 'text-[#059669]' : 'text-[#94A3B8]'}`}>
-                        {conta.ativa
-                          ? <ToggleRight style={{ width: 16, height: 16 }} />
-                          : <ToggleLeft style={{ width: 16, height: 16 }} />}
-                        {conta.ativa ? 'Ativa' : 'Inativa'}
-                      </button>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <button className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
-                        <Edit2 style={{ width: 13, height: 13 }} />
-                      </button>
-                    </td>
-                  </tr>
+                ) : grupos.map(grupo => (
+                  <Fragment key={grupo.titulo || 'flat'}>
+                    {grupo.titulo && (
+                      <tr className="bg-[#F8FAFC]">
+                        <td colSpan={2} className="px-4 py-1.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wide">
+                          {grupo.titulo}
+                        </td>
+                      </tr>
+                    )}
+                    {grupo.contas.map(conta => (
+                      <tr key={`${grupo.titulo}-${conta.codigo}`} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
+                        <td className="px-4 py-2.5 text-[13px] font-medium text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                          {conta.codigo}
+                        </td>
+                        <td className="px-4 py-2.5 text-[13px] text-[#0F172A]">{conta.nome}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
             <div className="px-4 py-2.5 border-t border-[#E2E8F0]">
-              <p className="text-[12px] text-[#475569]">{filtered.length} contas</p>
+              <p className="text-[12px] text-[#475569]">{totalContas} contas</p>
             </div>
           </div>
         </div>

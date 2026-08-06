@@ -1,6 +1,5 @@
-import { apiGet, apiGetBlob, apiPost, getToken } from './client';
-import type { Documento, Sugestao, UploadDocumentoResponse } from '../types/documento';
-import type { LancamentoResponse } from '../types/lancamento';
+import { apiGet, apiGetBlob, getToken } from './client';
+import type { Documento, UploadDocumentoResponse } from '../types/documento';
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8080';
@@ -27,14 +26,6 @@ export async function uploadDocumento(file: File): Promise<UploadDocumentoRespon
   }
 
   return response.json();
-}
-
-export async function analisarDocumento(documentoId: number): Promise<Sugestao> {
-  return apiPost<Sugestao>('/analises', { documentoId });
-}
-
-export async function aprovarSugestao(sugestaoId: number, validadoPor: number): Promise<LancamentoResponse> {
-  return apiPost<LancamentoResponse>(`/analises/${sugestaoId}/aprovar?validadoPor=${validadoPor}`, {});
 }
 
 function descarregarBlob(blob: Blob, nomeFicheiro: string) {

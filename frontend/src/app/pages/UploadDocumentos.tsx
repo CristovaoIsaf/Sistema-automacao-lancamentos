@@ -1,25 +1,23 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Upload, FileText, CheckCircle2, AlertCircle, Sparkles, Loader2, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { analisarDocumento, aprovarSugestao, uploadDocumento } from '../api/documentoApi';
+import { uploadDocumento } from '../api/documentoApi';
+import { analisarDocumento } from '../api/sugestaoApi';
 import type { Sugestao } from '../types/documento';
-import type { LancamentoResponse } from '../types/lancamento';
 
 export function UploadDocumentos() {
+  const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [approving, setApproving] = useState(false);
   const [documentId, setDocumentId] = useState<number | null>(null);
   const [analise, setAnalise] = useState<Sugestao | null>(null);
-  const [lancamento, setLancamento] = useState<LancamentoResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
     setAnalise(null);
-    setLancamento(null);
     setError(null);
   };
 
@@ -72,26 +70,9 @@ export function UploadDocumentos() {
     }
   };
 
-  const aprovarAnalise = async () => {
-    if (!analise?.id) {
-      toast.error('Ainda não existe uma análise concluída');
-      return;
-    }
-
-    try {
-      setApproving(true);
-      setError(null);
-
-      const data = await aprovarSugestao(analise.id, 1);
-      setLancamento(data);
-      toast.success('Lançamento aprovado com sucesso');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro inesperado na aprovação';
-      setError(message);
-      toast.error(message);
-    } finally {
-      setApproving(false);
-    }
+  const reverEAprovar = () => {
+    if (!analise) return;
+    navigate('/lancamento-diario', { state: { sugestao: analise } });
   };
 
   return (
@@ -139,8 +120,8 @@ export function UploadDocumentos() {
             <button onClick={analisarDocumentoAtual} disabled={analyzing || !documentId} className="w-full sm:w-auto flex-1 min-w-[120px] rounded-md bg-[#7C3AED] px-3 py-2 text-white text-sm disabled:opacity-50">
               {analyzing ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={14} />A analisar...</span> : '2. Analisar'}
             </button>
-            <button onClick={aprovarAnalise} disabled={approving || !analise?.id} className="w-full sm:w-auto flex-1 min-w-[120px] rounded-md bg-[#059669] px-3 py-2 text-white text-sm disabled:opacity-50">
-              {approving ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={14} />A aprovar...</span> : '3. Aprovar'}
+            <button onClick={reverEAprovar} disabled={!analise?.id} className="w-full sm:w-auto flex-1 min-w-[160px] inline-flex items-center justify-center gap-1.5 rounded-md bg-[#059669] px-3 py-2 text-white text-sm disabled:opacity-50">
+              3. Rever e Aprovar <ArrowRight size={14} />
             </button>
           </div>
 
@@ -173,7 +154,6 @@ export function UploadDocumentos() {
             <div className="space-y-2 text-sm text-[#475569]">
               <div>Documento ID: <span className="font-semibold text-[#0F172A]">{documentId ?? '—'}</span></div>
               <div>Análise ID: <span className="font-semibold text-[#0F172A]">{analise?.id ?? '—'}</span></div>
-              <div>Lançamento ID: <span className="font-semibold text-[#0F172A]">{lancamento?.id ?? '—'}</span></div>
             </div>
           </div>
 
@@ -192,31 +172,17 @@ export function UploadDocumentos() {
                 <div><span className="font-semibold text-[#0F172A]">Valor:</span> {analise.valor}</div>
                 <div><span className="font-semibold text-[#0F172A]">Descrição:</span> {analise.descricao}</div>
                 <div><span className="font-semibold text-[#0F172A]">Estado:</span> {analise.estado}</div>
+                {analise.estado === 'PENDENTE' && (
+                  <button
+                    onClick={reverEAprovar}
+                    className="mt-2 w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-[#059669] hover:bg-[#047857] px-3 py-2 text-white text-sm font-medium transition-colors"
+                  >
+                    <CheckCircle2 size={14} /> Rever e Aprovar Lançamento <ArrowRight size={14} />
+                  </button>
+                )}
               </div>
             ) : (
               <p className="text-sm text-[#94A3B8]">Ainda não foi feita a análise.</p>
-            )}
-          </div>
-
-          <div className="bg-white border border-[#E2E8F0] rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 size={16} className="text-[#059669]" />
-              <h2 className="text-[13px] font-semibold text-[#0F172A]">Lançamento aprovado</h2>
-            </div>
-            {lancamento ? (
-              <div className="space-y-2 text-sm text-[#475569]">
-                <div><span className="font-semibold text-[#0F172A]">Estado:</span> {lancamento.estado}</div>
-                <div><span className="font-semibold text-[#0F172A]">Origem:</span> {lancamento.origem}</div>
-                {lancamento.linhas.map((linha, index) => (
-                  <div key={index} className="rounded-md bg-[#F8FAFC] p-2">
-                    <div><span className="font-semibold text-[#0F172A]">Conta:</span> {linha.conta}</div>
-                    <div><span className="font-semibold text-[#0F172A]">Débito:</span> {linha.debito ?? '—'}</div>
-                    <div><span className="font-semibold text-[#0F172A]">Crédito:</span> {linha.credito ?? '—'}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[#94A3B8]">Ainda não foi criado nenhum lançamento.</p>
             )}
           </div>
         </div>

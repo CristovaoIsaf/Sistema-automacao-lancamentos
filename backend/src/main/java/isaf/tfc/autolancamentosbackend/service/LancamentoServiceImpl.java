@@ -213,6 +213,8 @@ public class LancamentoServiceImpl implements LancamentoService {
 
         dto.setOrigem(lancamento.getOrigem());
 
+        dto.setEditadoManualmente(lancamento.getEditadoManualmente());
+
 
         List<LinhaLancamentoDTO> linhas =
                 lancamento.getLinhas()

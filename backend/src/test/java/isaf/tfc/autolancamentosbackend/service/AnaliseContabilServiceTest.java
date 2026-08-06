@@ -1,6 +1,8 @@
 package isaf.tfc.autolancamentosbackend.service;
 
+import isaf.tfc.autolancamentosbackend.dto.AprovarSugestaoRequest;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
+import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 import isaf.tfc.autolancamentosbackend.model.EstadoSugestao;
 import isaf.tfc.autolancamentosbackend.model.Lancamento;
@@ -13,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import tools.jackson.databind.ObjectMapper;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -126,6 +130,107 @@ class AnaliseContabilServiceTest {
                 .hasMessageContaining("não está equilibrado");
 
         verify(lancamentoRepository, never()).save(any());
+        verify(sugestaoRepository, never()).save(any());
+    }
+
+    @Test
+    void aprovarSugestao_comOverrideDeLinhas_usaAsLinhasDoRequestNaoAsDaSugestao() {
+        Sugestao sugestao = sugestaoBase();
+        sugestao.setLinhasJson("""
+                [{"conta":"99","nome":"Ignorada","debito":"1.00","credito":null}]
+                """);
+        when(sugestaoRepository.findById(1L)).thenReturn(java.util.Optional.of(sugestao));
+
+        AprovarSugestaoRequest request = new AprovarSugestaoRequest(
+                List.of(
+                        new LinhaLancamentoDTO("45", new java.math.BigDecimal("1000.00"), null, "Caixa"),
+                        new LinhaLancamentoDTO("61", null, new java.math.BigDecimal("1000.00"), "Vendas")
+                ),
+                false
+        );
+
+        LancamentoResponseDTO resposta = service.aprovarSugestao(1L, 4L, request);
+
+        assertThat(resposta.getLinhas()).hasSize(2);
+        assertThat(resposta.getLinhas().get(0).getConta()).isEqualTo("45");
+        assertThat(resposta.getEditadoManualmente()).isFalse();
+    }
+
+    @Test
+    void aprovarSugestao_comOverrideEEditadoTrue_marcaLancamentoComoEditado() {
+        Sugestao sugestao = sugestaoBase();
+        sugestao.setLinhasJson(null);
+        when(sugestaoRepository.findById(1L)).thenReturn(java.util.Optional.of(sugestao));
+
+        AprovarSugestaoRequest request = new AprovarSugestaoRequest(
+                List.of(
+                        new LinhaLancamentoDTO("45", new java.math.BigDecimal("500.00"), null, "Caixa"),
+                        new LinhaLancamentoDTO("61", null, new java.math.BigDecimal("500.00"), "Vendas")
+                ),
+                true
+        );
+
+        LancamentoResponseDTO resposta = service.aprovarSugestao(1L, 4L, request);
+
+        assertThat(resposta.getEditadoManualmente()).isTrue();
+    }
+
+    @Test
+    void aprovarSugestao_comOverrideDesequilibrado_lancaExcecaoENaoGrava() {
+        Sugestao sugestao = sugestaoBase();
+        when(sugestaoRepository.findById(1L)).thenReturn(java.util.Optional.of(sugestao));
+
+        AprovarSugestaoRequest request = new AprovarSugestaoRequest(
+                List.of(
+                        new LinhaLancamentoDTO("45", new java.math.BigDecimal("500.00"), null, "Caixa"),
+                        new LinhaLancamentoDTO("61", null, new java.math.BigDecimal("400.00"), "Vendas")
+                ),
+                false
+        );
+
+        assertThatThrownBy(() -> service.aprovarSugestao(1L, 4L, request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("não está equilibrado");
+
+        verify(lancamentoRepository, never()).save(any());
+    }
+
+    @Test
+    void aprovarSugestao_jaRejeitada_lancaExcecaoENaoGravaNadaDeNovo() {
+        Sugestao sugestao = sugestaoBase();
+        sugestao.setEstado(EstadoSugestao.REJEITADA);
+        when(sugestaoRepository.findById(1L)).thenReturn(java.util.Optional.of(sugestao));
+
+        assertThatThrownBy(() -> service.aprovarSugestao(1L, 4L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("anulada");
+
+        verify(lancamentoRepository, never()).save(any());
+    }
+
+    @Test
+    void rejeitarSugestao_pendente_marcaComoRejeitadaSemCriarLancamento() {
+        Sugestao sugestao = sugestaoBase();
+        when(sugestaoRepository.findById(1L)).thenReturn(java.util.Optional.of(sugestao));
+
+        service.rejeitarSugestao(1L);
+
+        ArgumentCaptor<Sugestao> sugestaoCapturada = ArgumentCaptor.forClass(Sugestao.class);
+        verify(sugestaoRepository).save(sugestaoCapturada.capture());
+        assertThat(sugestaoCapturada.getValue().getEstado()).isEqualTo(EstadoSugestao.REJEITADA);
+        verify(lancamentoRepository, never()).save(any());
+    }
+
+    @Test
+    void rejeitarSugestao_jaAprovada_lancaExcecaoENaoAltera() {
+        Sugestao sugestao = sugestaoBase();
+        sugestao.setEstado(EstadoSugestao.APROVADA);
+        when(sugestaoRepository.findById(1L)).thenReturn(java.util.Optional.of(sugestao));
+
+        assertThatThrownBy(() -> service.rejeitarSugestao(1L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("pendente");
+
         verify(sugestaoRepository, never()).save(any());
     }
 

@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid, History } from 'lucide-react';
+import { useLocation } from 'react-router';
+import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid, History, Sparkles } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
 import { criarLancamento, listarLancamentos } from '../api/lancamentoApi';
+import { aprovarSugestao, rejeitarSugestao } from '../api/sugestaoApi';
 import { listarContas } from '../api/contaApi';
 import { listarCategoriasConta } from '../api/categoriaContaApi';
 import type { CategoriaConta, ContaResumo } from '../types/categoriaConta';
 import type { LancamentoResponse } from '../types/lancamento';
+import type { Sugestao } from '../types/documento';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -29,6 +32,34 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 
 const novaLinha = (): Linha => ({ id: crypto.randomUUID(), conta: '', descricao: '', debito: '', credito: '' });
 
+interface LinhaSugerida {
+  conta: string;
+  nome?: string;
+  debito?: string | null;
+  credito?: string | null;
+  descricao?: string;
+}
+
+// Sugestao.linhasJson é uma lista de LinhaSugeridaDTO serializada pelo
+// backend — converte para o mesmo formato de Linha usado no formulário
+// manual, para o utilizador poder editar exactamente o que a IA propôs.
+function parseLinhasSugeridas(linhasJson?: string | null): Linha[] {
+  if (!linhasJson) return [];
+  try {
+    const bruto = JSON.parse(linhasJson) as LinhaSugerida[];
+    return bruto.map(l => ({
+      id: crypto.randomUUID(),
+      conta: l.conta,
+      descricao: l.descricao ?? '',
+      debito: l.debito ?? '',
+      credito: l.credito ?? '',
+    }));
+  } catch (err) {
+    console.error('Não foi possível interpretar as linhas sugeridas:', err);
+    return [];
+  }
+}
+
 function valorTotalLancamento(l: LancamentoResponse): number {
   return l.linhas.reduce((soma, linha) => soma + Number(linha.debito ?? 0), 0);
 }
@@ -47,32 +78,43 @@ type TaxaIva = 'nenhuma' | '14' | '7';
 type TipoIva = 'venda' | 'compra';
 
 export function LancamentoDiario() {
+  const location = useLocation();
+  const sugestaoRecebida = (location.state as { sugestao?: Sugestao } | null)?.sugestao ?? null;
+
   const [data, setData] = useState(hoje());
   const [nfDoc, setNfDoc] = useState('');
   const [nif, setNif] = useState('');
   const [tipoDoc, setTipoDoc] = useState('Fatura');
-  const [historico, setHistorico] = useState('');
-  const [linhas, setLinhas] = useState<Linha[]>([novaLinha(), novaLinha()]);
+  const [historico, setHistorico] = useState(sugestaoRecebida?.descricao ?? '');
+  const [linhas, setLinhas] = useState<Linha[]>(() => {
+    const linhasDaSugestao = parseLinhasSugeridas(sugestaoRecebida?.linhasJson);
+    return linhasDaSugestao.length > 0 ? linhasDaSugestao : [novaLinha(), novaLinha()];
+  });
   const [aGuardar, setAGuardar] = useState(false);
   const [contas, setContas] = useState<ContaSimples[]>([]);
   const [categorias, setCategorias] = useState<CategoriaConta[]>([]);
-  const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState(sugestaoRecebida?.categoria ?? '');
   const [historicoRecente, setHistoricoRecente] = useState<LancamentoResponse[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(true);
 
-  // Histórico dos últimos lançamentos manuais registados nesta página —
-  // recarregado sempre que um novo lançamento é guardado com sucesso, para
-  // que a lista fique sempre actualizada sem precisar de navegar até
-  // "Lançamentos".
+  // Sugestão da IA em revisão (veio de UploadDocumentos.tsx) — enquanto
+  // estiver PENDENTE, a zona de acções mostra Aprovar/Editar/Anular em vez
+  // de "Registar Lançamento". Fica null para um lançamento 100% manual.
+  const [sugestaoAtual, setSugestaoAtual] = useState<Sugestao | null>(sugestaoRecebida);
+  const [aProcessarSugestao, setAProcessarSugestao] = useState(false);
+
+  // Histórico dos últimos lançamentos registados nesta página — manuais e
+  // sugestões da IA aprovadas/editadas aqui — recarregado sempre que um
+  // lançamento é guardado com sucesso, para a lista ficar sempre
+  // actualizada sem precisar de navegar até "Lançamentos".
   const carregarHistorico = async () => {
     try {
       setCarregandoHistorico(true);
       const dados = await listarLancamentos();
-      const manuais = dados
-        .filter(l => l.origem === 'MANUAL')
+      const recentes = dados
         .sort((a, b) => b.id - a.id)
         .slice(0, 5);
-      setHistoricoRecente(manuais);
+      setHistoricoRecente(recentes);
     } catch (err) {
       console.error('Erro ao carregar histórico de lançamentos:', err);
     } finally {
@@ -156,6 +198,22 @@ export function LancamentoDiario() {
     setBaseIva('');
   };
 
+  const limparFormulario = () => {
+    setLinhas([novaLinha(), novaLinha()]);
+    setNfDoc('');
+    setNif('');
+    setHistorico('');
+  };
+
+  const linhasParaEnvio = () => linhas
+    .filter(l => l.conta && (l.debito || l.credito))
+    .map(l => ({
+      conta: l.conta,
+      debito: parseFloat(l.debito) || 0,
+      credito: parseFloat(l.credito) || 0,
+      descricao: l.descricao || historico,
+    }));
+
   const handleSave = async () => {
     if (!equilibrado) {
       toast.error('Lançamento desequilibrado');
@@ -171,25 +229,55 @@ export function LancamentoDiario() {
       await criarLancamento({
         data,
         descricao: historico,
-        linhas: linhas
-          .filter(l => l.conta && (l.debito || l.credito))
-          .map(l => ({
-            conta: l.conta,
-            debito: parseFloat(l.debito) || 0,
-            credito: parseFloat(l.credito) || 0,
-            descricao: l.descricao || historico,
-          })),
+        linhas: linhasParaEnvio(),
       });
       toast.success('Lançamento diário registado');
-      setLinhas([novaLinha(), novaLinha()]);
-      setNfDoc('');
-      setNif('');
-      setHistorico('');
+      limparFormulario();
       await carregarHistorico();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao registar lançamento');
     } finally {
       setAGuardar(false);
+    }
+  };
+
+  // Aprova a sugestão da IA — editado=false quando o contabilista aceita
+  // tal como está, editado=true quando alterou algo antes de aprovar
+  // (grava-se em Lancamento.editadoManualmente).
+  const aprovarOuEditarSugestao = async (editado: boolean) => {
+    if (!sugestaoAtual) return;
+    if (!equilibrado) {
+      toast.error('Lançamento desequilibrado');
+      return;
+    }
+
+    setAProcessarSugestao(true);
+    try {
+      await aprovarSugestao(sugestaoAtual.id, linhasParaEnvio(), editado);
+      toast.success(editado ? 'Lançamento aprovado com as edições' : 'Lançamento aprovado');
+      limparFormulario();
+      setSugestaoAtual(null);
+      await carregarHistorico();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao aprovar sugestão');
+    } finally {
+      setAProcessarSugestao(false);
+    }
+  };
+
+  const anularSugestao = async () => {
+    if (!sugestaoAtual) return;
+
+    setAProcessarSugestao(true);
+    try {
+      await rejeitarSugestao(sugestaoAtual.id);
+      toast.success('Sugestão anulada');
+      limparFormulario();
+      setSugestaoAtual(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao anular sugestão');
+    } finally {
+      setAProcessarSugestao(false);
     }
   };
 
@@ -199,6 +287,17 @@ export function LancamentoDiario() {
         <h1 className="text-[18px] font-semibold text-[#0F172A]">Lançamento Diário</h1>
         <p className="text-[13px] text-[#475569] mt-0.5">Registo manual · Método das partidas dobradas</p>
       </div>
+
+      {sugestaoAtual && sugestaoAtual.estado === 'PENDENTE' && (
+        <div className="flex items-center gap-2 bg-[#F5F3FF] border border-[#DDD6FE] rounded-lg px-4 py-2.5">
+          <Sparkles style={{ width: 14, height: 14 }} className="text-[#7C3AED] flex-shrink-0" />
+          <p className="text-[13px] text-[#5B21B6]">
+            <span className="font-medium">Sugestão da IA — revisão pendente.</span>{' '}
+            Tipo detectado: <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{sugestaoAtual.tipoDocumento}</span>.
+            Os dados abaixo foram pré-carregados; confirma ou ajusta antes de aprovar.
+          </p>
+        </div>
+      )}
 
       <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-[#E2E8F0]">
@@ -406,20 +505,49 @@ export function LancamentoDiario() {
         </div>
 
         <div className="px-4 py-3 border-t border-[#E2E8F0] flex items-center gap-2">
-          <button
-            onClick={handleSave}
-            disabled={!equilibrado || aGuardar}
-            className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white text-[13px] font-medium rounded-md transition-colors"
-          >
-            {aGuardar ? <Loader2 className="animate-spin" size={13} /> : null}
-            Registar Lançamento
-          </button>
-          <button
-            onClick={() => { setLinhas([novaLinha(), novaLinha()]); setNfDoc(''); setNif(''); setHistorico(''); }}
-            className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors"
-          >
-            Limpar
-          </button>
+          {sugestaoAtual && sugestaoAtual.estado === 'PENDENTE' ? (
+            <>
+              <button
+                onClick={() => aprovarOuEditarSugestao(false)}
+                disabled={!equilibrado || aProcessarSugestao}
+                className="flex items-center gap-1.5 h-8 px-3 bg-[#059669] hover:bg-[#047857] disabled:opacity-40 text-white text-[13px] font-medium rounded-md transition-colors"
+              >
+                {aProcessarSugestao ? <Loader2 className="animate-spin" size={13} /> : null}
+                Aprovar Lançamento
+              </button>
+              <button
+                onClick={() => aprovarOuEditarSugestao(true)}
+                disabled={!equilibrado || aProcessarSugestao}
+                className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white text-[13px] font-medium rounded-md transition-colors"
+              >
+                Editar
+              </button>
+              <button
+                onClick={anularSugestao}
+                disabled={aProcessarSugestao}
+                className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#FCA5A5] hover:bg-[#FEF2F2] disabled:opacity-40 text-[#DC2626] text-[13px] font-medium rounded-md transition-colors"
+              >
+                Anular
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={!equilibrado || aGuardar}
+                className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white text-[13px] font-medium rounded-md transition-colors"
+              >
+                {aGuardar ? <Loader2 className="animate-spin" size={13} /> : null}
+                Registar Lançamento
+              </button>
+              <button
+                onClick={limparFormulario}
+                className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors"
+              >
+                Limpar
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -434,7 +562,7 @@ export function LancamentoDiario() {
           <table className="w-full">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                {['Data', 'Histórico', 'Valor (AOA)', 'Estado'].map(h => (
+                {['Data', 'Histórico', 'Valor (AOA)', 'Origem', 'Estado'].map(h => (
                   <th key={h} className={`px-3 py-2 text-[11px] font-medium text-[#475569] uppercase tracking-wide ${h === 'Valor (AOA)' ? 'text-right' : 'text-left'}`}>
                     {h}
                   </th>
@@ -444,14 +572,14 @@ export function LancamentoDiario() {
             <tbody>
               {carregandoHistorico ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-[13px] text-[#94A3B8]">
+                  <td colSpan={5} className="px-3 py-6 text-center text-[13px] text-[#94A3B8]">
                     <Loader2 className="animate-spin inline-block mr-2" size={13} /> A carregar...
                   </td>
                 </tr>
               ) : historicoRecente.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-[13px] text-[#94A3B8]">
-                    Ainda não há lançamentos manuais registados.
+                  <td colSpan={5} className="px-3 py-6 text-center text-[13px] text-[#94A3B8]">
+                    Ainda não há lançamentos registados.
                   </td>
                 </tr>
               ) : historicoRecente.map(l => {
@@ -464,6 +592,20 @@ export function LancamentoDiario() {
                     <td className="px-3 py-2 text-[13px] text-[#475569] max-w-[280px] truncate">{l.descricao}</td>
                     <td className="px-3 py-2 text-[13px] font-medium text-[#0F172A] text-right whitespace-nowrap" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                       {formatarKwanza(valorTotalLancamento(l))}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                          l.origem === 'AUTOMATICO' ? 'bg-[#F5F3FF] text-[#7C3AED]' : 'bg-[#EFF6FF] text-[#2563EB]'
+                        }`}>
+                          {l.origem === 'AUTOMATICO' ? '✦ IA' : 'Manual'}
+                        </span>
+                        {l.origem === 'AUTOMATICO' && l.editadoManualmente && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#FFFBEB] text-[#D97706]">
+                            Editado
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${estadoInfo.classe}`}>

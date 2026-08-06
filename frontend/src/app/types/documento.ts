@@ -21,10 +21,17 @@ export interface UploadDocumentoResponse {
 
 export interface Sugestao {
   id: number;
+  documentoId?: number;
   tipoDocumento: string;
   categoriaContabil: string;
   categoria?: string | null;
   valor: string;
   descricao: string;
+  // Lista de LinhaSugeridaDTO (conta/nome/debito/credito) serializada em
+  // JSON — usar JSON.parse antes de mostrar/editar como linhas de
+  // lançamento (ver LancamentoDiario.tsx).
+  linhasJson?: string | null;
+  fundamentacao?: string | null;
+  lancamentoId?: number | null;
   estado: string;
 }

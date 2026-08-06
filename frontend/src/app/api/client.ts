@@ -84,6 +84,32 @@ export async function apiPost<T>(
 
 
 
+// Para endpoints que respondem 204 No Content — response.json() rebentaria
+// com um corpo vazio.
+export async function apiPostVoid(
+  path: string,
+  body?: unknown
+): Promise<void> {
+
+  const response = await fetch(
+    `${API_BASE}${path}`,
+    {
+      method: 'POST',
+      headers: headers(),
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    }
+  );
+
+
+  if (!response.ok) {
+    throw new Error(
+      `Erro ${response.status}`
+    );
+  }
+}
+
+
+
 export async function apiGetBlob(
   path: string
 ): Promise<Blob> {

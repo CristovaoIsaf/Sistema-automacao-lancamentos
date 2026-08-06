@@ -25,5 +25,7 @@ public class LancamentoResponseDTO {
 
     private OrigemLancamento origem;
 
+    private Boolean editadoManualmente;
+
     private List<LinhaLancamentoDTO> linhas;
 }

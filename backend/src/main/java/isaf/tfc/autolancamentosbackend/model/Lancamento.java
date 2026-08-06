@@ -35,6 +35,12 @@ public class Lancamento {
 
     @Enumerated(EnumType.STRING)
     private OrigemLancamento origem;
+
+    // Aditivo — só relevante para origem AUTOMATICO: distingue "aprovado tal
+    // como a IA sugeriu" (false/null) de "contabilista alterou as linhas
+    // antes de aprovar" (true). Lançamentos manuais ficam sempre null.
+    private Boolean editadoManualmente;
+
     @OneToMany(
             mappedBy = "lancamento",
             cascade = CascadeType.ALL,

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Search, Download, Eye, Edit2, Plus, CheckCircle2, Clock, XCircle, X, Check, Loader2 } from 'lucide-react';
-import { planoContasAngolano, formatarKwanza } from '../data/mockData';
+import { formatarKwanza } from '../data/mockData';
 import * as Dialog from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import { useAuth, permissoes } from '../auth/AuthContext';
 import { criarLancamento, exportarLancamentos, listarLancamentos } from '../api/lancamentoApi';
+import { listarContas } from '../api/contaApi';
 import type { LancamentoResponse } from '../types/lancamento';
+import type { ContaResumo } from '../types/categoriaConta';
 
 function Badge({ variant, children }: { variant: 'aprovado' | 'pendente' | 'rejeitado' | 'ia' | 'manual'; children: React.ReactNode }) {
   const styles = {
@@ -23,8 +25,6 @@ function Badge({ variant, children }: { variant: 'aprovado' | 'pendente' | 'reje
 }
 
 type StatusFilter = 'todos' | 'PENDENTE' | 'VALIDADO' | 'CANCELADO';
-
-const contas = planoContasAngolano.filter(c => c.nivel === 3);
 
 const estadoBadge: Record<string, { variant: 'aprovado' | 'pendente' | 'rejeitado'; label: string }> = {
   VALIDADO: { variant: 'aprovado', label: 'Validado' },
@@ -52,7 +52,7 @@ function inicioDoAno(): string {
   return `${new Date().getFullYear()}-01-01`;
 }
 
-function NovoLancamentoDialog({ open, onClose, onCriado }: { open: boolean; onClose: () => void; onCriado: () => void }) {
+function NovoLancamentoDialog({ open, onClose, onCriado, contas }: { open: boolean; onClose: () => void; onCriado: () => void; contas: ContaResumo[] }) {
   const [form, setForm] = useState({ data: hoje(), documento: '', historico: '', contaD: '', contaC: '', valor: '' });
   const [salvando, setSalvando] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -139,7 +139,7 @@ function NovoLancamentoDialog({ open, onClose, onCriado }: { open: boolean; onCl
                   className="w-full h-8 px-2 text-[12px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all"
                   style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   <option value="">Seleccionar...</option>
-                  {contas.map(c => <option key={c.id} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+                  {contas.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
                 </select>
               </div>
               <div>
@@ -148,7 +148,7 @@ function NovoLancamentoDialog({ open, onClose, onCriado }: { open: boolean; onCl
                   className="w-full h-8 px-2 text-[12px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all"
                   style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   <option value="">Seleccionar...</option>
-                  {contas.map(c => <option key={c.id} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+                  {contas.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
                 </select>
               </div>
             </div>
@@ -187,6 +187,13 @@ export function Lancamentos() {
   const [erro, setErro] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
   const [periodo, setPeriodo] = useState({ inicio: inicioDoAno(), fim: hoje() });
+  const [contas, setContas] = useState<ContaResumo[]>([]);
+
+  useEffect(() => {
+    listarContas()
+      .then(dados => setContas(dados as unknown as ContaResumo[]))
+      .catch(err => console.error('Erro ao carregar plano de contas:', err));
+  }, []);
 
   const carregar = async () => {
     try {
@@ -379,9 +386,14 @@ export function Lancamentos() {
                     {formatarKwanza(valorTotal(l))}
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
-                    <Badge variant={l.origem === 'AUTOMATICO' ? 'ia' : 'manual'}>
-                      {l.origem === 'AUTOMATICO' ? '✦ IA' : 'Manual'}
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant={l.origem === 'AUTOMATICO' ? 'ia' : 'manual'}>
+                        {l.origem === 'AUTOMATICO' ? '✦ IA' : 'Manual'}
+                      </Badge>
+                      {l.origem === 'AUTOMATICO' && l.editadoManualmente && (
+                        <Badge variant="pendente">Editado</Badge>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <Badge variant={estadoInfo.variant}>
@@ -412,7 +424,7 @@ export function Lancamentos() {
         </div>
       </div>
 
-      <NovoLancamentoDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onCriado={carregar} />
+      <NovoLancamentoDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onCriado={carregar} contas={contas} />
     </div>
   );
 }

@@ -32,6 +32,8 @@ export interface LancamentoResponse {
 
     origem: string;
 
+    editadoManualmente?: boolean | null;
+
     linhas: LinhaLancamento[];
 
 }

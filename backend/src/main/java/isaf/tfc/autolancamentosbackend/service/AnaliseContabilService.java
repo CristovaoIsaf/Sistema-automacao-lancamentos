@@ -3,6 +3,7 @@ package isaf.tfc.autolancamentosbackend.service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import isaf.tfc.autolancamentosbackend.dto.AnaliseResponse;
+import isaf.tfc.autolancamentosbackend.dto.AprovarSugestaoRequest;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaSugeridaDTO;
@@ -90,11 +91,25 @@ public class AnaliseContabilService {
      * (compatibilidade com sugestões antigas, criadas antes desta alteração).
      */
     public LancamentoResponseDTO aprovarSugestao(Long sugestaoId, Long validadoPor) {
+        return aprovarSugestao(sugestaoId, validadoPor, null);
+    }
+
+    /**
+     * Variante usada pelo fluxo de revisão em LancamentoDiario.tsx: o
+     * contabilista pode ter alterado as linhas mostradas no ecrã antes de
+     * aprovar — nesse caso `request.linhas` chega preenchido e é usado tal
+     * como está, em vez de reler linhasJson. `request` pode ser null/vazio
+     * (compatibilidade com chamadas antigas, ex. testes existentes).
+     */
+    public LancamentoResponseDTO aprovarSugestao(Long sugestaoId, Long validadoPor, AprovarSugestaoRequest request) {
         Sugestao sugestao = sugestaoRepository.findById(sugestaoId)
                 .orElseThrow(() -> new RuntimeException("Sugestão não encontrada: " + sugestaoId));
 
         if (sugestao.getEstado() == EstadoSugestao.APROVADA) {
             throw new RuntimeException("Sugestão já foi aprovada anteriormente.");
+        }
+        if (sugestao.getEstado() == EstadoSugestao.REJEITADA) {
+            throw new RuntimeException("Sugestão foi anulada e já não pode ser aprovada.");
         }
 
         Lancamento lancamento = new Lancamento();
@@ -105,27 +120,43 @@ public class AnaliseContabilService {
         lancamento.setEstado(EstadoLancamento.VALIDADO);
         lancamento.setOrigem(OrigemLancamento.AUTOMATICO);
 
-        List<LinhaSugeridaDTO> linhasSugeridas = desserializarLinhas(sugestao.getLinhasJson());
+        boolean temOverride = request != null && request.getLinhas() != null && !request.getLinhas().isEmpty();
 
-        if (linhasSugeridas.isEmpty()) {
-            LinhaLancamento linha = new LinhaLancamento();
-            linha.setConta(sugestao.getCategoriaContabil());
-            linha.setDebito(PartidasDobradas.parseValor(sugestao.getValor()));
-            linha.setCredito(null);
-            linha.setDescricao(sugestao.getDescricao());
-            linha.setLancamento(lancamento);
-            lancamento.getLinhas().add(linha);
-        } else {
-            for (LinhaSugeridaDTO linhaSugerida : linhasSugeridas) {
+        if (temOverride) {
+            for (LinhaLancamentoDTO linhaDTO : request.getLinhas()) {
                 LinhaLancamento linha = new LinhaLancamento();
-                linha.setConta(linhaSugerida.getConta());
-                linha.setDebito(PartidasDobradas.parseValorNullable(linhaSugerida.getDebito()));
-                linha.setCredito(PartidasDobradas.parseValorNullable(linhaSugerida.getCredito()));
-                linha.setDescricao(sugestao.getDescricao());
+                linha.setConta(linhaDTO.getConta());
+                linha.setDebito(linhaDTO.getDebito());
+                linha.setCredito(linhaDTO.getCredito());
+                linha.setDescricao(linhaDTO.getDescricao() != null ? linhaDTO.getDescricao() : sugestao.getDescricao());
                 linha.setLancamento(lancamento);
                 lancamento.getLinhas().add(linha);
             }
             PartidasDobradas.validarEquilibrio(lancamento.getLinhas());
+            lancamento.setEditadoManualmente(request.isEditado());
+        } else {
+            List<LinhaSugeridaDTO> linhasSugeridas = desserializarLinhas(sugestao.getLinhasJson());
+
+            if (linhasSugeridas.isEmpty()) {
+                LinhaLancamento linha = new LinhaLancamento();
+                linha.setConta(sugestao.getCategoriaContabil());
+                linha.setDebito(PartidasDobradas.parseValor(sugestao.getValor()));
+                linha.setCredito(null);
+                linha.setDescricao(sugestao.getDescricao());
+                linha.setLancamento(lancamento);
+                lancamento.getLinhas().add(linha);
+            } else {
+                for (LinhaSugeridaDTO linhaSugerida : linhasSugeridas) {
+                    LinhaLancamento linha = new LinhaLancamento();
+                    linha.setConta(linhaSugerida.getConta());
+                    linha.setDebito(PartidasDobradas.parseValorNullable(linhaSugerida.getDebito()));
+                    linha.setCredito(PartidasDobradas.parseValorNullable(linhaSugerida.getCredito()));
+                    linha.setDescricao(sugestao.getDescricao());
+                    linha.setLancamento(lancamento);
+                    lancamento.getLinhas().add(linha);
+                }
+                PartidasDobradas.validarEquilibrio(lancamento.getLinhas());
+            }
         }
 
         Lancamento salvo = lancamentoRepository.save(lancamento);
@@ -135,6 +166,22 @@ public class AnaliseContabilService {
         sugestaoRepository.save(sugestao);
 
         return converterParaDTO(salvo);
+    }
+
+    /**
+     * Anula uma Sugestao pendente — o contabilista decidiu que não deve
+     * originar nenhum Lancamento. Não mexe em nada além do estado.
+     */
+    public void rejeitarSugestao(Long sugestaoId) {
+        Sugestao sugestao = sugestaoRepository.findById(sugestaoId)
+                .orElseThrow(() -> new RuntimeException("Sugestão não encontrada: " + sugestaoId));
+
+        if (sugestao.getEstado() != EstadoSugestao.PENDENTE) {
+            throw new RuntimeException("Só é possível anular uma sugestão ainda pendente.");
+        }
+
+        sugestao.setEstado(EstadoSugestao.REJEITADA);
+        sugestaoRepository.save(sugestao);
     }
 
     private String valorOuDefeito(String valor, String defeito) {
@@ -167,6 +214,7 @@ public class AnaliseContabilService {
         dto.setDescricao(lancamento.getDescricao());
         dto.setEstado(lancamento.getEstado());
         dto.setOrigem(lancamento.getOrigem());
+        dto.setEditadoManualmente(lancamento.getEditadoManualmente());
 
         List<LinhaLancamentoDTO> linhas = lancamento.getLinhas().stream()
                 .map(linha -> new LinhaLancamentoDTO(
