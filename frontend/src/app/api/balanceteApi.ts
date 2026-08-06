@@ -1,20 +1,10 @@
 import { apiGet } from './client';
-import type { ItemBalancete } from '../types/contabilidade';
+import type { BalanceteResponse } from '../types/balancete';
 
-export interface BalanceteItemExtendido extends ItemBalancete {
-  saldoAnterior: number;
-  acumuladoDebito: number;
-  acumuladoCredito: number;
-  saldoAcumulado: number;
-}
-
-export async function obterBalancete(
-  periodo: string,
-  inicio?: string,
-  fim?: string
-): Promise<BalanceteItemExtendido[]> {
-  const params = new URLSearchParams({ periodo });
+export async function obterBalancete(inicio?: string, fim?: string): Promise<BalanceteResponse> {
+  const params = new URLSearchParams();
   if (inicio) params.append('inicio', inicio);
   if (fim) params.append('fim', fim);
-  return apiGet<BalanceteItemExtendido[]>(`/api/balancete?${params.toString()}`);
+  const qs = params.toString();
+  return apiGet<BalanceteResponse>(`/api/balancetes${qs ? `?${qs}` : ''}`);
 }

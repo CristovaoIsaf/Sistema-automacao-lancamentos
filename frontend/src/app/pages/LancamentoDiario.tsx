@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent } from 'lucide-react';
 import { formatarKwanza, planoContasAngolano } from '../data/mockData';
+import { criarLancamento } from '../api/lancamentoApi';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -13,15 +14,31 @@ interface Linha {
 
 const contas = planoContasAngolano.filter(c => c.nivel === 3);
 
-const novaLinha = (): Linha => ({ id: Date.now().toString(), conta: '', descricao: '', debito: '', credito: '' });
+const hoje = () => new Date().toISOString().slice(0, 10);
+
+const novaLinha = (): Linha => ({ id: crypto.randomUUID(), conta: '', descricao: '', debito: '', credito: '' });
+
+// Taxas de IVA em vigor em Angola: 14% (taxa geral) e 7% (taxa reduzida,
+// bens de primeira necessidade) — ver services/pgc.py (TAXA_IVA) no lado
+// da classificação automática, que hoje só aplica a taxa geral. Aqui, no
+// lançamento manual, o utilizador escolhe qual das duas se aplica.
+type TaxaIva = 'nenhuma' | '14' | '7';
+type TipoIva = 'venda' | 'compra';
 
 export function LancamentoDiario() {
-  const [data, setData] = useState('2026-07-08');
+  const [data, setData] = useState(hoje());
   const [nfDoc, setNfDoc] = useState('');
   const [nif, setNif] = useState('');
   const [tipoDoc, setTipoDoc] = useState('Fatura');
   const [historico, setHistorico] = useState('');
   const [linhas, setLinhas] = useState<Linha[]>([novaLinha(), novaLinha()]);
+  const [aGuardar, setAGuardar] = useState(false);
+
+  // Assistente de IVA — só calcula e acrescenta uma linha às já existentes,
+  // não substitui a edição manual das restantes.
+  const [baseIva, setBaseIva] = useState('');
+  const [taxaIva, setTaxaIva] = useState<TaxaIva>('nenhuma');
+  const [tipoIva, setTipoIva] = useState<TipoIva>('venda');
 
   const totalD = linhas.reduce((s, l) => s + (parseFloat(l.debito) || 0), 0);
   const totalC = linhas.reduce((s, l) => s + (parseFloat(l.credito) || 0), 0);
@@ -32,9 +49,63 @@ export function LancamentoDiario() {
   const updateLinha = (id: string, field: keyof Linha, value: string) =>
     setLinhas(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
-  const handleSave = () => {
-    if (!equilibrado) { toast.error('Lançamento desequilibrado'); return; }
-    toast.success('Lançamento diário registado');
+  const valorIvaCalculado = taxaIva !== 'nenhuma' && baseIva
+    ? (parseFloat(baseIva) || 0) * (Number(taxaIva) / 100)
+    : 0;
+
+  const adicionarLinhaDeIva = () => {
+    if (taxaIva === 'nenhuma' || !baseIva || valorIvaCalculado <= 0) {
+      toast.error('Indica a base tributável e a taxa de IVA');
+      return;
+    }
+    const contaIva = tipoIva === 'venda' ? '34.5.2' : '34.5.1';
+    const nomeIva = tipoIva === 'venda' ? 'IVA liquidado' : 'IVA dedutível';
+    const linha: Linha = {
+      id: crypto.randomUUID(),
+      conta: contaIva,
+      descricao: `${nomeIva} (${taxaIva}%) — extensão do projeto, Decreto 82/01 não define conta oficial`,
+      debito: tipoIva === 'compra' ? valorIvaCalculado.toFixed(2) : '',
+      credito: tipoIva === 'venda' ? valorIvaCalculado.toFixed(2) : '',
+    };
+    setLinhas(prev => [...prev, linha]);
+    toast.success(`Linha de IVA (${taxaIva}%) adicionada — ${formatarKwanza(valorIvaCalculado)}`);
+    setBaseIva('');
+  };
+
+  const handleSave = async () => {
+    if (!equilibrado) {
+      toast.error('Lançamento desequilibrado');
+      return;
+    }
+    if (!historico.trim()) {
+      toast.error('Preenche o histórico do lançamento');
+      return;
+    }
+
+    setAGuardar(true);
+    try {
+      await criarLancamento({
+        data,
+        descricao: historico,
+        linhas: linhas
+          .filter(l => l.conta && (l.debito || l.credito))
+          .map(l => ({
+            conta: l.conta,
+            debito: parseFloat(l.debito) || 0,
+            credito: parseFloat(l.credito) || 0,
+            descricao: l.descricao || historico,
+          })),
+      });
+      toast.success('Lançamento diário registado');
+      setLinhas([novaLinha(), novaLinha()]);
+      setNfDoc('');
+      setNif('');
+      setHistorico('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao registar lançamento');
+    } finally {
+      setAGuardar(false);
+    }
   };
 
   return (
@@ -75,11 +146,56 @@ export function LancamentoDiario() {
             </select>
           </div>
           <div className="col-span-2 lg:col-span-4">
-            <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Histórico</label>
+            <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Histórico *</label>
             <input type="text" value={historico} onChange={e => setHistorico(e.target.value)}
               placeholder="Descrição do lançamento..."
               className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all" />
           </div>
+        </div>
+      </div>
+
+      {/* Assistente de IVA */}
+      <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#E2E8F0] flex items-center gap-2">
+          <Percent style={{ width: 14, height: 14 }} className="text-[#7C3AED]" />
+          <h2 className="text-[13px] font-semibold text-[#0F172A]">Calcular linha de IVA</h2>
+        </div>
+        <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Base tributável (sem IVA)</label>
+            <input
+              type="number"
+              value={baseIva}
+              onChange={e => setBaseIva(e.target.value)}
+              placeholder="0"
+              className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+              style={{ fontFamily: 'JetBrains Mono, monospace' }}
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Taxa de IVA</label>
+            <select value={taxaIva} onChange={e => setTaxaIva(e.target.value as TaxaIva)}
+              className="w-full h-8 px-2 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all">
+              <option value="nenhuma">Sem IVA</option>
+              <option value="14">14% (taxa geral)</option>
+              <option value="7">7% (taxa reduzida)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Operação</label>
+            <select value={tipoIva} onChange={e => setTipoIva(e.target.value as TipoIva)}
+              className="w-full h-8 px-2 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all">
+              <option value="venda">Venda (34.5.2 · IVA liquidado)</option>
+              <option value="compra">Compra (34.5.1 · IVA dedutível)</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={adicionarLinhaDeIva}
+            className="h-8 px-3 bg-[#F5F3FF] hover:bg-[#EDE9FE] text-[#7C3AED] text-[13px] font-medium rounded-md transition-colors"
+          >
+            {valorIvaCalculado > 0 ? `Adicionar ${formatarKwanza(valorIvaCalculado)}` : 'Adicionar linha de IVA'}
+          </button>
         </div>
       </div>
 
@@ -111,6 +227,8 @@ export function LancamentoDiario() {
                       style={{ fontFamily: 'JetBrains Mono, monospace' }}
                     >
                       <option value="">Seleccionar conta</option>
+                      {linha.conta === '34.5.1' && <option value="34.5.1">34.5.1 — IVA dedutível</option>}
+                      {linha.conta === '34.5.2' && <option value="34.5.2">34.5.2 — IVA liquidado</option>}
                       {contas.map(c => <option key={c.id} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
                     </select>
                   </td>
@@ -178,9 +296,10 @@ export function LancamentoDiario() {
         <div className="px-4 py-3 border-t border-[#E2E8F0] flex items-center gap-2">
           <button
             onClick={handleSave}
-            disabled={!equilibrado}
+            disabled={!equilibrado || aGuardar}
             className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white text-[13px] font-medium rounded-md transition-colors"
           >
+            {aGuardar ? <Loader2 className="animate-spin" size={13} /> : null}
             Registar Lançamento
           </button>
           <button

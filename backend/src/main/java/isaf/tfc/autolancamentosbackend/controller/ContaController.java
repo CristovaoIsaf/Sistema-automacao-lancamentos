@@ -25,7 +25,10 @@ import java.util.List;
 @RequestMapping("/api/contas")
 public class ContaController {
 
-    private static final List<ContaDTO> CONTAS = List.of(
+    // Público para ser reutilizado por BalanceteService — mesma fonte de
+    // nomes de conta, para o Balancete nunca mostrar um nome diferente do
+    // que a página "Plano de Contas" mostra para o mesmo código.
+    public static final List<ContaDTO> CONTAS = List.of(
             new ContaDTO("21", "Compras"),
             new ContaDTO("26", "Mercadorias"),
             new ContaDTO("31", "Clientes"),

@@ -49,8 +49,14 @@ public class LancamentoServiceImpl implements LancamentoService {
         );
 
 
+        // VALIDADO logo na criação: ao contrário de uma Sugestao da IA (que
+        // precisa de revisão humana antes de virar Lancamento — ver
+        // AnaliseContabilService.aprovarSugestao), um lançamento manual já
+        // É a decisão humana direta. Ficar PENDENTE para sempre (sem
+        // nenhum endpoint que o mude de estado) fazia-o nunca aparecer no
+        // Balancete/Dashboard.
         lancamento.setEstado(
-                EstadoLancamento.PENDENTE
+                EstadoLancamento.VALIDADO
         );
 
 
@@ -229,15 +235,19 @@ public class LancamentoServiceImpl implements LancamentoService {
             List<LinhaLancamentoDTO> linhas
     ){
 
+        // Cada linha normalmente só preenche débito OU crédito (nunca os
+        // dois) — o valor nulo do lado não usado é o caso normal, não uma
+        // exceção. Sem o "!= null ? ... : ZERO" abaixo, BigDecimal::add
+        // rebenta com NullPointerException em qualquer lançamento real.
         BigDecimal totalDebito =
                 linhas.stream()
-                        .map(LinhaLancamentoDTO::getDebito)
+                        .map(linha -> linha.getDebito() != null ? linha.getDebito() : BigDecimal.ZERO)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
 
         BigDecimal totalCredito =
                 linhas.stream()
-                        .map(LinhaLancamentoDTO::getCredito)
+                        .map(linha -> linha.getCredito() != null ? linha.getCredito() : BigDecimal.ZERO)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
 
