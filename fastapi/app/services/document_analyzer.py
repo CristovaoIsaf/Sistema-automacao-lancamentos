@@ -56,8 +56,12 @@ class DocumentAnalyzer:
 
         valor = c.get("valor", "0")
         descricao = (c.get("descricao") or "").strip()
+        # Taxa de IVA referida no próprio documento (14% ou 7%) — se o
+        # classificador não a indicar, pgc_ao.construir_lancamento usa a
+        # taxa geral (14%) por omissão (ver pgc._resolver_taxa_iva).
+        taxa_iva = c.get("taxaIva")
 
-        linhas = pgc_ao.construir_lancamento(tipo, valor, descricao)
+        linhas = pgc_ao.construir_lancamento(tipo, valor, descricao, taxa_iva=taxa_iva)
 
         # Verificação defensiva: garantir partidas dobradas antes de devolver.
         if not pgc_ao.lancamento_equilibrado(linhas):
@@ -109,6 +113,7 @@ Responda APENAS com JSON válido, sem texto à volta, neste formato exacto:
   "entidade": "nome da empresa/pessoa, se houver",
   "nif": "NIF se houver",
   "data": "data (dd/mm/aaaa) se houver",
+  "taxaIva": "taxa de IVA referida no documento — só \"14\" ou \"7\" — ou vazio se o documento não indicar nenhuma taxa de IVA",
   "confianca": 0
 }}"""
 
@@ -200,7 +205,16 @@ Responda APENAS com JSON válido, sem texto à volta, neste formato exacto:
             "entidade": "",
             "nif": accounting.get("nif", "") or "",
             "data": data,
+            "taxaIva": self._extrair_taxa_iva(text or ""),
             "confianca": 65 if tipo != pgc_ao.TIPO_A_CLASSIFICAR else 40,
             "modelo": "regras",
             "fundamentacao": "",
         }
+
+    def _extrair_taxa_iva(self, texto: str) -> str:
+        """Procura no texto do documento uma menção explícita à taxa de IVA
+        (ex: "IVA 14%", "Taxa de IVA: 7%") — só reconhece 14 ou 7, as
+        únicas taxas de IVA em vigor em Angola tratadas por este projeto.
+        Vazio se não encontrar, para pgc_ao usar a taxa geral por omissão."""
+        match = re.search(r"iva[^0-9%]{0,15}(14|7)\s*%", texto, re.IGNORECASE)
+        return match.group(1) if match else ""

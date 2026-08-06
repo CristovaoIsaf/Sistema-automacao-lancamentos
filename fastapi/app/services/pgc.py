@@ -154,23 +154,27 @@ def conta_despesa_servico(texto: str) -> tuple:
     return C_FSE  # Fornecimentos e serviços de terceiros (genérico)
 
 
-def construir_lancamento(tipo: str, valor_total, descricao: str = "") -> List[Dict[str, str]]:
+def construir_lancamento(tipo: str, valor_total, descricao: str = "", taxa_iva=None) -> List[Dict[str, str]]:
     """
     Devolve as linhas de um lançamento EQUILIBRADO (partidas dobradas) usando
     apenas contas do Decreto 82/01. Total débito == total crédito, sempre.
 
     IVA: se IVA_ATIVO for False (por omissão), lança pelo valor total.
+    `taxa_iva` (ex: "14", "7", Decimal ou None) é a taxa referida no próprio
+    documento (fatura), extraída pelo classificador — quando o documento não
+    a indica explicitamente, usa-se a taxa geral TAXA_IVA (14%) por omissão.
     """
     total = _dec(valor_total)
+    taxa = _resolver_taxa_iva(taxa_iva)
 
     if tipo == TIPO_COMPRA_MERCADORIA:
-        return _linhas_compra(C_COMPRAS, total, descricao)
+        return _linhas_compra(C_COMPRAS, total, descricao, taxa)
     if tipo == TIPO_COMPRA_SERVICO:
-        return _linhas_compra(conta_despesa_servico(descricao), total, descricao)
+        return _linhas_compra(conta_despesa_servico(descricao), total, descricao, taxa)
     if tipo == TIPO_VENDA_MERCADORIA:
-        return _linhas_venda(C_VENDAS, total, descricao)
+        return _linhas_venda(C_VENDAS, total, descricao, taxa)
     if tipo == TIPO_PRESTACAO_SERVICO:
-        return _linhas_venda(C_PRESTACAO_SERVICOS, total, descricao)
+        return _linhas_venda(C_PRESTACAO_SERVICOS, total, descricao, taxa)
     if tipo == TIPO_PAGAMENTO_FORNECEDOR:
         # Débito 32 Fornecedores / Crédito 45 Caixa (ou 43 Banco)
         return [
@@ -192,14 +196,49 @@ def construir_lancamento(tipo: str, valor_total, descricao: str = "") -> List[Di
     ]
 
 
-def _linhas_compra(conta_gasto: tuple, total: Decimal, descricao: str) -> List[Dict[str, str]]:
+# Taxas de IVA em vigor em Angola que este projeto reconhece explicitamente
+# na fatura: 14% (geral) e 7% (reduzida, bens de primeira necessidade).
+# Qualquer outro valor extraído do documento é ignorado (cai no fallback da
+# taxa geral) — evita que um número mal reconhecido pelo OCR/IA vire uma
+# taxa de IVA inventada.
+TAXAS_IVA_RECONHECIDAS = {"14": Decimal("0.14"), "7": Decimal("0.07")}
+
+
+def _resolver_taxa_iva(taxa_iva) -> Decimal:
+    """Converte a taxa de IVA referida no documento (texto/Decimal/None,
+    ex: "14", "14%", 0.14) para Decimal — só aceita 14% ou 7% (as únicas
+    taxas de IVA em vigor em Angola que este projeto trata); qualquer outro
+    valor, ou a ausência de indicação no documento, usa a taxa geral
+    TAXA_IVA por omissão."""
+    if taxa_iva is None:
+        return TAXA_IVA
+
+    texto = str(taxa_iva).strip().replace("%", "")
+    if texto in TAXAS_IVA_RECONHECIDAS:
+        return TAXAS_IVA_RECONHECIDAS[texto]
+
+    try:
+        valor = Decimal(_normalizar_numero(texto))
+        # Aceita tanto "14" como "0.14" vindos do documento.
+        if valor > 1:
+            valor = valor / Decimal("100")
+        if valor in TAXAS_IVA_RECONHECIDAS.values():
+            return valor
+    except Exception:
+        pass
+
+    return TAXA_IVA
+
+
+def _linhas_compra(conta_gasto: tuple, total: Decimal, descricao: str, taxa: Decimal = None) -> List[Dict[str, str]]:
     """Compra: débito gasto/existência (+IVA dedutível) / crédito Fornecedores (total)."""
-    if IVA_ATIVO and CONTA_IVA_DEDUTIVEL and TAXA_IVA:
-        base = (total / (Decimal("1") + TAXA_IVA)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    taxa = taxa if taxa is not None else TAXA_IVA
+    if IVA_ATIVO and CONTA_IVA_DEDUTIVEL and taxa:
+        base = (total / (Decimal("1") + taxa)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         iva = total - base
         return [
             _linha(conta_gasto, debito=base, descricao=descricao),
-            _linha(CONTA_IVA_DEDUTIVEL, debito=iva, descricao="IVA dedutível"),
+            _linha(CONTA_IVA_DEDUTIVEL, debito=iva, descricao=f"IVA dedutível ({taxa * 100:.0f}%)"),
             _linha(C_FORNECEDORES, credito=total, descricao=descricao),
         ]
     return [
@@ -208,15 +247,16 @@ def _linhas_compra(conta_gasto: tuple, total: Decimal, descricao: str) -> List[D
     ]
 
 
-def _linhas_venda(conta_proveito: tuple, total: Decimal, descricao: str) -> List[Dict[str, str]]:
+def _linhas_venda(conta_proveito: tuple, total: Decimal, descricao: str, taxa: Decimal = None) -> List[Dict[str, str]]:
     """Venda: débito Clientes (total) / crédito proveito (+IVA liquidado)."""
-    if IVA_ATIVO and CONTA_IVA_LIQUIDADO and TAXA_IVA:
-        base = (total / (Decimal("1") + TAXA_IVA)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    taxa = taxa if taxa is not None else TAXA_IVA
+    if IVA_ATIVO and CONTA_IVA_LIQUIDADO and taxa:
+        base = (total / (Decimal("1") + taxa)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         iva = total - base
         return [
             _linha(C_CLIENTES, debito=total, descricao=descricao),
             _linha(conta_proveito, credito=base, descricao=descricao),
-            _linha(CONTA_IVA_LIQUIDADO, credito=iva, descricao="IVA liquidado"),
+            _linha(CONTA_IVA_LIQUIDADO, credito=iva, descricao=f"IVA liquidado ({taxa * 100:.0f}%)"),
         ]
     return [
         _linha(C_CLIENTES, debito=total, descricao=descricao),
