@@ -19,6 +19,7 @@ import {
   LogOut,
   ScrollText,
   FolderOpen,
+  NotebookPen,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { Perfil } from '../types/contabilidade';
@@ -47,6 +48,9 @@ const menuSections: { label: string; items: MenuItem[] }[] = [
       // também acede (RN010 só exclui a escrita de documentos ao Auditor).
       { path: '/documentos', label: 'Documentos', icon: FolderOpen, perfis: TODOS },
       { path: '/lancamentos', label: 'Lançamentos', icon: FileText, perfis: TODOS },
+      // Registo manual de partidas dobradas — acto de escrita, mesma regra
+      // de perfis que "Novo Documento" (RN010: Auditor não escreve).
+      { path: '/lancamento-diario', label: 'Lançamento Manual', icon: NotebookPen, perfis: ['ADMINISTRADOR', 'CONTABILISTA'] },
       { path: '/balancetes', label: 'Balancetes', icon: Scale, perfis: TODOS },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, perfis: TODOS },
       // Consulta de logs de auditoria (UC010) — Administrador e Auditor
