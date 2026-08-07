@@ -26,6 +26,8 @@ export interface Sugestao {
   categoriaContabil: string;
   categoria?: string | null;
   valor: string;
+  entidade?: string | null;
+  nif?: string | null;
   descricao: string;
   // Lista de LinhaSugeridaDTO (conta/nome/debito/credito) serializada em
   // JSON — usar JSON.parse antes de mostrar/editar como linhas de

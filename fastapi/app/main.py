@@ -81,11 +81,15 @@ async def analisar(ficheiro: UploadFile = File(...), preprocess: bool = True):
         raise HTTPException(status_code=400, detail=ocr_res.get("error", "Erro no OCR"))
 
     texto = ocr_res.get("text", "") or ""
-    accounting = ocr_service.extract_accounting_data(texto)
+    # extract_invoice_data (não a extract_accounting_data antiga, que só
+    # devolvia 4 campos "por compatibilidade") — dá ao analyzer os dados já
+    # tratados por regex (emitente, adquirente, nº fatura, valor, IVA...),
+    # para a IA não ter de os re-extrair do texto em bruto.
+    extraido = ocr_service.extract_invoice_data(texto)
 
     analise = analyzer.analyze_document(
         texto,
-        {"accounting_data": accounting, "confidence": ocr_res.get("confidence", 0)},
+        {"dados_fatura": extraido["dados"], "confidence": ocr_res.get("confidence", 0)},
     )
 
     # Anexa contexto do OCR para revisão humana no frontend.

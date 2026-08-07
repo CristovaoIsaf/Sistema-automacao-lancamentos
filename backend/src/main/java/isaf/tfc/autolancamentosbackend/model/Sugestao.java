@@ -39,6 +39,13 @@ public class Sugestao {
     // Valor devolvido pelo Gemini em formato texto (ex: "150.000,00 Kz")
     private String valor;
 
+    // Nome/NIF da entidade (fornecedor numa compra, cliente numa venda) —
+    // já vem tratado por regex do FastAPI (regex_extract.py), nunca
+    // "inventado" pela IA. Aditivo — sugestões antigas ficam com null.
+    private String entidade;
+
+    private String nif;
+
     @Column(columnDefinition = "TEXT")
     private String descricao;
 

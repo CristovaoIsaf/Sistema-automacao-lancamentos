@@ -169,6 +169,9 @@ export function UploadDocumentos() {
                   <div><span className="font-semibold text-[#0F172A]">Categoria:</span> {analise.categoria}</div>
                 )}
                 <div><span className="font-semibold text-[#0F172A]">Conta principal:</span> {analise.categoriaContabil}</div>
+                {analise.entidade && (
+                  <div><span className="font-semibold text-[#0F172A]">Entidade:</span> {analise.entidade}{analise.nif ? ` (NIF ${analise.nif})` : ''}</div>
+                )}
                 <div><span className="font-semibold text-[#0F172A]">Valor:</span> {analise.valor}</div>
                 <div><span className="font-semibold text-[#0F172A]">Descrição:</span> {analise.descricao}</div>
                 <div><span className="font-semibold text-[#0F172A]">Estado:</span> {analise.estado}</div>

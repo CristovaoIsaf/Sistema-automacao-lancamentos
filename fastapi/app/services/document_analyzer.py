@@ -10,11 +10,20 @@ from services import pgc as pgc_ao
 logger = logging.getLogger(__name__)
 
 # Regra de ouro deste ficheiro:
-#   A IA (ou as regras) só CLASSIFICA o tipo de documento e EXTRAI valores.
-#   As CONTAS do lançamento vêm SEMPRE, de forma determinística, do módulo
-#   pgc_ao (Decreto 82/01). O modelo nunca escolhe códigos de conta — assim
-#   nunca inventa contas nem viola o plano oficial. Esta parte NUNCA muda
-#   com o motor de IA usado (Gemini, Ollama directo, ou agora AnythingLLM).
+#   A IA (ou as regras) só CLASSIFICA o tipo de documento. Toda a extração
+#   de dados (valor, entidade, NIF, data, taxa de IVA) já vem tratada e
+#   determinística de services/regex_extract.py (via ocr_service.py) —
+#   nunca é pedida à IA. Isto evita que a IA tenha de "pensar" em coisas
+#   que já são resolvidas de forma fiável e testável antes de lhe chegar.
+#   As CONTAS do lançamento continuam a vir SEMPRE, de forma determinística,
+#   do módulo pgc_ao (Decreto 82/01). O modelo nunca escolhe códigos de
+#   conta — assim nunca inventa contas nem viola o plano oficial.
+
+TIPOS_COMPRA = {
+    pgc_ao.TIPO_COMPRA_MERCADORIA,
+    pgc_ao.TIPO_COMPRA_SERVICO,
+    pgc_ao.TIPO_PAGAMENTO_FORNECEDOR,
+}
 
 
 class DocumentAnalyzer:
@@ -37,29 +46,28 @@ class DocumentAnalyzer:
 
     # ── Ponto de entrada ─────────────────────────────────────────────────────
     def analyze_document(self, text: str, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
+        dados_fatura = ocr_data.get("dados_fatura", {}) or {}
+
         try:
             if self.use_ai:
-                classificacao = self._classificar_com_anythingllm(text, ocr_data)
+                classificacao = self._classificar_com_anythingllm(text, dados_fatura)
             else:
-                classificacao = self._classificar_com_regras(text, ocr_data)
+                classificacao = self._classificar_com_regras(text, dados_fatura)
         except Exception as e:
             logger.error(f"Erro na classificação, a usar regras: {e}")
-            classificacao = self._classificar_com_regras(text, ocr_data)
+            classificacao = self._classificar_com_regras(text, dados_fatura)
 
-        return self._montar_resposta(classificacao, ocr_data)
+        return self._montar_resposta(classificacao, dados_fatura)
 
     # ── Montagem do lançamento (contas sempre do pgc_ao) ─────────────────────
-    def _montar_resposta(self, c: Dict[str, Any], ocr_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _montar_resposta(self, c: Dict[str, Any], dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
         tipo = c.get("tipo", pgc_ao.TIPO_A_CLASSIFICAR)
         if tipo not in pgc_ao.TIPOS_VALIDOS:
             tipo = pgc_ao.TIPO_A_CLASSIFICAR
 
-        valor = c.get("valor", "0")
+        valor = dados_fatura.get("valor_total_aoa") or "0"
         descricao = (c.get("descricao") or "").strip()
-        # Taxa de IVA referida no próprio documento (14% ou 7%) — se o
-        # classificador não a indicar, pgc_ao.construir_lancamento usa a
-        # taxa geral (14%) por omissão (ver pgc._resolver_taxa_iva).
-        taxa_iva = c.get("taxaIva")
+        taxa_iva = self._taxa_iva_tratada(dados_fatura)
 
         linhas = pgc_ao.construir_lancamento(tipo, valor, descricao, taxa_iva=taxa_iva)
 
@@ -69,15 +77,17 @@ class DocumentAnalyzer:
             tipo = pgc_ao.TIPO_A_CLASSIFICAR
             linhas = pgc_ao.construir_lancamento(tipo, valor, descricao)
 
+        entidade, nif = self._entidade_e_nif(tipo, dados_fatura)
+
         return {
             "success": True,
             "tipoDocumento": tipo,
             "descricao": descricao or "Documento contabilístico",
             "valorTotal": f"{pgc_ao._dec(valor):.2f}",
             "moeda": "AOA",
-            "entidade": c.get("entidade", ""),
-            "nif": c.get("nif", ""),
-            "data": c.get("data", ""),
+            "entidade": entidade,
+            "nif": nif,
+            "data": dados_fatura.get("data_emissao") or "",
             "confianca": c.get("confianca", 70),
             "modelo": c.get("modelo", "regras"),
             "fundamentacao": c.get("fundamentacao", ""),
@@ -85,36 +95,57 @@ class DocumentAnalyzer:
             "linhas": linhas,
         }
 
+    def _entidade_e_nif(self, tipo: str, dados_fatura: Dict[str, Any]) -> tuple:
+        """Escolhe qual das partes do documento é "a entidade" do lançamento:
+        numa compra/pagamento a fornecedor, é o emitente (quem nos vendeu);
+        numa venda/prestação/recebimento, é o adquirente (nosso cliente).
+        Cai para a outra parte se a preferida não tiver sido extraída."""
+        if tipo in TIPOS_COMPRA:
+            nome = dados_fatura.get("emitente_nome") or dados_fatura.get("adquirente_nome") or ""
+            nif = dados_fatura.get("emitente_nif") or dados_fatura.get("adquirente_nif") or ""
+        else:
+            nome = dados_fatura.get("adquirente_nome") or dados_fatura.get("emitente_nome") or ""
+            nif = dados_fatura.get("adquirente_nif") or dados_fatura.get("emitente_nif") or ""
+        return nome, nif
+
+    def _taxa_iva_tratada(self, dados_fatura: Dict[str, Any]) -> str:
+        """Só reconhece 14% ou 7% (as taxas de IVA em vigor em Angola
+        tratadas por este projeto) entre as taxas já detetadas por regex em
+        regex_extract.taxas_iva_encontradas — fonte única, sem re-extrair."""
+        for taxa in dados_fatura.get("taxas_iva_encontradas") or []:
+            taxa_normalizada = str(taxa).replace(",", ".").split(".")[0]
+            if taxa_normalizada in ("14", "7"):
+                return taxa_normalizada
+        return ""
+
     # ── Classificação via AnythingLLM: 2 workspaces separados ────────────────
-    #   1) EXEMPLOS decide a classificação (tipo/valor/entidade), por
-    #      semelhança com documentos de exemplo já classificados.
+    #   1) EXEMPLOS decide a classificação (tipo), por semelhança com
+    #      documentos de exemplo já classificados — usando dados já tratados,
+    #      não o texto em bruto como fonte primária.
     #   2) NORMAS só é consultado depois, para fundamentar legalmente o tipo
     #      já decidido — falha aqui não deita fora uma classificação válida.
-    def _classificar_com_anythingllm(self, text: str, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
-        accounting = ocr_data.get("accounting_data", {})
-        texto = (text or "")[:3000]
+    def _classificar_com_anythingllm(self, text: str, dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
+        texto = (text or "")[:2000]
 
         prompt = f"""Você é um especialista em contabilidade angolana (PGC-AO, Decreto n.º 82/01).
-Classifique o documento e extraia os dados. NÃO indique contas contabilísticas.
 
-TEXTO DO DOCUMENTO:
+Os dados abaixo já foram extraídos do documento de forma determinística (regex) — não os reinterprete nem tente corrigi-los. A sua única tarefa é CLASSIFICAR o tipo de operação contabilística deste documento. Não indique contas contabilísticas nem valores — isso já está tratado.
+
+DADOS JÁ EXTRAÍDOS:
+- Emitente: {dados_fatura.get('emitente_nome') or '(não identificado)'} (NIF {dados_fatura.get('emitente_nif') or '?'})
+- Adquirente: {dados_fatura.get('adquirente_nome') or '(não identificado)'} (NIF {dados_fatura.get('adquirente_nif') or '?'})
+- Nº documento: {dados_fatura.get('numero_fatura') or '?'}
+- Valor total: {dados_fatura.get('valor_total_aoa') or '?'} AOA
+- Data: {dados_fatura.get('data_emissao') or '?'}
+- Rótulo do tipo de documento detetado no texto: {dados_fatura.get('tipo_documento') or 'desconhecido'}
+
+EXCERTO DO TEXTO (só para contexto/desambiguação, não para extrair dados novos):
 {texto}
-
-DADOS DO OCR:
-- Valores: {accounting.get('valores_monetarios', [])}
-- Datas: {accounting.get('datas', [])}
-- NIF: {accounting.get('nif', '')}
-- Tipo detetado: {accounting.get('tipo_documento', 'desconhecido')}
 
 Responda APENAS com JSON válido, sem texto à volta, neste formato exacto:
 {{
   "tipo": "um de: compra_mercadoria, compra_servico, venda_mercadoria, prestacao_servico, pagamento_fornecedor, recebimento_cliente, a_classificar",
-  "valor": "valor total numérico, só dígitos e ponto decimal (ex: 150000.00)",
   "descricao": "descrição curta do documento",
-  "entidade": "nome da empresa/pessoa, se houver",
-  "nif": "NIF se houver",
-  "data": "data (dd/mm/aaaa) se houver",
-  "taxaIva": "taxa de IVA referida no documento — só \"14\" ou \"7\" — ou vazio se o documento não indicar nenhuma taxa de IVA",
   "confianca": 0
 }}"""
 
@@ -167,14 +198,11 @@ Responda APENAS com JSON válido, sem texto à volta, neste formato exacto:
             raise
 
     # ── Classificação por regras (fallback) ──────────────────────────────────
-    def _classificar_com_regras(self, text: str, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
-        accounting = ocr_data.get("accounting_data", {})
+    # Só classifica o tipo por palavras-chave — valor/entidade/NIF/data/IVA
+    # já vêm tratados em dados_fatura e são aplicados em _montar_resposta,
+    # exactamente como no caminho com IA.
+    def _classificar_com_regras(self, text: str, dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
         t = (text or "").lower()
-
-        valores = accounting.get("valores_monetarios", [])
-        valor = valores[0] if valores else "0"
-        datas = accounting.get("datas", [])
-        data = datas[0] if datas else ""
 
         recebimento = any(k in t for k in ["recibo de pagamento", "recebido", "recebemos", "entrada de caixa"])
         pagamento = any(k in t for k in ["pagamento a", "pago a fornecedor", "comprovativo de pagamento", "saída de caixa"])
@@ -201,21 +229,8 @@ Responda APENAS com JSON válido, sem texto à volta, neste formato exacto:
 
         return {
             "tipo": tipo,
-            "valor": valor,
             "descricao": (text or "")[:150].replace("\n", " ").strip(),
-            "entidade": "",
-            "nif": accounting.get("nif", "") or "",
-            "data": data,
-            "taxaIva": self._extrair_taxa_iva(text or ""),
             "confianca": 65 if tipo != pgc_ao.TIPO_A_CLASSIFICAR else 40,
             "modelo": "regras",
             "fundamentacao": "",
         }
-
-    def _extrair_taxa_iva(self, texto: str) -> str:
-        """Procura no texto do documento uma menção explícita à taxa de IVA
-        (ex: "IVA 14%", "Taxa de IVA: 7%") — só reconhece 14 ou 7, as
-        únicas taxas de IVA em vigor em Angola tratadas por este projeto.
-        Vazio se não encontrar, para pgc_ao usar a taxa geral por omissão."""
-        match = re.search(r"iva[^0-9%]{0,15}(14|7)\s*%", texto, re.IGNORECASE)
-        return match.group(1) if match else ""

@@ -134,6 +134,42 @@ class DocumentoControllerTest {
         assertThat(resposta.get(0).getTamanho()).isEqualTo(5);
     }
 
+    @Test
+    void upload_conteudoNovo_gravaComHashECodigo200() throws java.io.IOException {
+        org.springframework.web.multipart.MultipartFile ficheiro = Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        byte[] bytes = {1, 2, 3, 4};
+        when(ficheiro.isEmpty()).thenReturn(false);
+        when(ficheiro.getBytes()).thenReturn(bytes);
+        when(ficheiro.getOriginalFilename()).thenReturn("fatura.png");
+        when(ficheiro.getContentType()).thenReturn("image/png");
+        when(documentoRepository.findByHashConteudo(Mockito.anyString())).thenReturn(java.util.Optional.empty());
+        when(documentoRepository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var resposta = controller.upload(ficheiro, utilizador);
+
+        assertThat(resposta.getStatusCode().value()).isEqualTo(200);
+        org.mockito.ArgumentCaptor<DocumentoContabilistico> captor = org.mockito.ArgumentCaptor.forClass(DocumentoContabilistico.class);
+        Mockito.verify(documentoRepository).save(captor.capture());
+        assertThat(captor.getValue().getHashConteudo()).isNotBlank();
+    }
+
+    @Test
+    void upload_conteudoJaExistente_devolve409ENaoGravaNadaDeNovo() throws java.io.IOException {
+        org.springframework.web.multipart.MultipartFile ficheiro = Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        byte[] bytes = {1, 2, 3, 4};
+        when(ficheiro.isEmpty()).thenReturn(false);
+        when(ficheiro.getBytes()).thenReturn(bytes);
+
+        DocumentoContabilistico existente = documentoComId(42L, null);
+        existente.setNomeFicheiro("fatura-original.png");
+        when(documentoRepository.findByHashConteudo(Mockito.anyString())).thenReturn(java.util.Optional.of(existente));
+
+        var resposta = controller.upload(ficheiro, utilizador);
+
+        assertThat(resposta.getStatusCode().value()).isEqualTo(409);
+        Mockito.verify(documentoRepository, Mockito.never()).save(Mockito.any());
+    }
+
     private DocumentoContabilistico documentoComId(Long id, Long entidadeId) {
         DocumentoContabilistico documento = new DocumentoContabilistico();
         documento.setId(id);

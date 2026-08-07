@@ -61,6 +61,8 @@ public class AnaliseContabilService {
         sugestao.setTipoDocumento(valorOuDefeito(analise.getTipoDocumento(), "a_classificar"));
         sugestao.setCategoriaContabil(extrairCategoriaContabil(analise.getLinhas()));
         sugestao.setValor(valorOuDefeito(analise.getValorTotal(), "0"));
+        sugestao.setEntidade(analise.getEntidade());
+        sugestao.setNif(analise.getNif());
         sugestao.setDescricao(valorOuDefeito(analise.getDescricao(), "Análise não disponível"));
         sugestao.setTextoOriginal(analise.getTextoOcr());
         sugestao.setLinhasJson(serializarLinhas(analise.getLinhas()));

@@ -22,7 +22,11 @@ export async function uploadDocumento(file: File): Promise<UploadDocumentoRespon
   });
 
   if (!response.ok) {
-    throw new Error(`Erro ${response.status}`);
+    // 409 (documento duplicado) e outros erros do backend vêm com
+    // { message: "..." } — sem isto, o utilizador só via "Erro 409"
+    // genérico em vez de saber que o documento já tinha sido carregado.
+    const mensagem = await response.json().then(body => body?.message).catch(() => null);
+    throw new Error(mensagem || `Erro ${response.status}`);
   }
 
   return response.json();

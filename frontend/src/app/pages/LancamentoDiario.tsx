@@ -294,6 +294,9 @@ export function LancamentoDiario() {
           <p className="text-[13px] text-[#5B21B6]">
             <span className="font-medium">Sugestão da IA — revisão pendente.</span>{' '}
             Tipo detectado: <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{sugestaoAtual.tipoDocumento}</span>.
+            {sugestaoAtual.entidade && (
+              <> Entidade: <span className="font-medium">{sugestaoAtual.entidade}</span>{sugestaoAtual.nif ? ` (NIF ${sugestaoAtual.nif})` : ''}.</>
+            )}{' '}
             Os dados abaixo foram pré-carregados; confirma ou ajusta antes de aprovar.
           </p>
         </div>

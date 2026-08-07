@@ -29,6 +29,11 @@ public class DocumentoContabilistico {
 
     private LocalDateTime dataUpload;
 
+    // SHA-256 (hex) dos bytes do ficheiro — aditivo, usado para impedir
+    // que o mesmo documento seja carregado duas vezes (ver
+    // DocumentoController.upload). Documentos antigos ficam com null.
+    private String hashConteudo;
+
     // id do User que fez o upload; sem relação JPA para manter o padrão
     // já usado em Lancamento (sugestaoId, validadoPor)
     private Long userId;

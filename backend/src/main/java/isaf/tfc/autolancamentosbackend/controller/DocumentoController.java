@@ -13,6 +13,7 @@ import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.SugestaoRepository;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +26,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -57,12 +60,20 @@ public class DocumentoController {
     /**
      * Upload de um documento (PDF ou imagem). Guarda os bytes no banco.
      * O ficheiro fica pronto para ser analisado via POST /analises com o documentoId devolvido aqui.
+     *
+     * Rejeita duplicados: dois uploads do mesmo ficheiro (mesmo hash SHA-256
+     * dos bytes) originariam duas sugestões/lançamentos independentes para o
+     * mesmo documento — risco contabilístico real (despesa/receita
+     * duplicada), não só um incómodo de UI. Verificação global (não só do
+     * utilizador que carrega), porque o risco existe independentemente de
+     * quem submeteu o documento.
      */
     // RN010: escrita de documentos fica fora do Auditor (só leitura para
     // esse papel — ver GET /documentos e /documentos/{id}/download).
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CONTABILISTA')")
     @PostMapping(consumes = "multipart/form-data")
-    public ResponseEntity<DocumentoContabilistico> upload(
+    @Transactional
+    public ResponseEntity<?> upload(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal User user
     ) throws IOException {
@@ -70,14 +81,42 @@ public class DocumentoController {
             return ResponseEntity.badRequest().build();
         }
 
+        byte[] conteudo = file.getBytes();
+        String hash = calcularHash(conteudo);
+
+        Optional<DocumentoContabilistico> existente = documentoRepository.findByHashConteudo(hash);
+        if (existente.isPresent()) {
+            DocumentoContabilistico anterior = existente.get();
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "message", "Este documento já foi carregado anteriormente (\""
+                            + anterior.getNomeFicheiro() + "\", ID " + anterior.getId()
+                            + ", em " + anterior.getDataUpload() + ")."
+            ));
+        }
+
         DocumentoContabilistico documento = new DocumentoContabilistico();
         documento.setNomeFicheiro(file.getOriginalFilename());
         documento.setTipoConteudo(file.getContentType());
-        documento.setConteudo(file.getBytes());
+        documento.setConteudo(conteudo);
+        documento.setHashConteudo(hash);
         documento.setUserId(user.getId());
 
         DocumentoContabilistico salvo = documentoRepository.save(documento);
         return ResponseEntity.ok(salvo);
+    }
+
+    private String calcularHash(byte[] conteudo) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(conteudo);
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 não disponível na JVM", e);
+        }
     }
 
     /**

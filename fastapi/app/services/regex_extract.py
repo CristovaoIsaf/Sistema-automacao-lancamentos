@@ -135,7 +135,7 @@ TIPOS_DOCUMENTO = {
 }
 
 ROTULOS_DE_PARADA = [
-    "emitente", "adquirente", "cliente", "nif", "data", "hora",
+    "emitente", "adquirente", "cliente", "fornecedor", "nif", "data", "hora",
     "descri", "iva", "total", "hash", "processado por", "original",
     "fatura", "ft ", "fr ", "nc ",
 ]
@@ -208,9 +208,19 @@ def extrair_dados_fatura(texto_bruto: str) -> DadosFatura:
     dados = DadosFatura()
 
     # --- Emitente / Adquirente ---
-    dados.emitente_nome = _extrair_nome(texto, "Emitente") or None
-    dados.emitente_morada = _extrair_morada(texto, "Emitente") or None
-    dados.emitente_nif = _extrair_nif_por_proximidade(texto, "Emitente")
+    # "Fornecedor" é sinónimo comum de "Emitente" em faturas fora do
+    # formato estrito AGT (ex: os documentos de teste usados nesta sessão
+    # usam "Fornecedor:"/"Cliente:" em vez de "Emitente:"/"Adquirente:").
+    dados.emitente_nome = (
+        _extrair_nome(texto, "Emitente") or _extrair_nome(texto, "Fornecedor") or None
+    )
+    dados.emitente_morada = (
+        _extrair_morada(texto, "Emitente") or _extrair_morada(texto, "Fornecedor") or None
+    )
+    dados.emitente_nif = (
+        _extrair_nif_por_proximidade(texto, "Emitente")
+        or _extrair_nif_por_proximidade(texto, "Fornecedor")
+    )
 
     dados.adquirente_nome = (
         _extrair_nome(texto, "Adquirente") or _extrair_nome(texto, "Cliente") or None
