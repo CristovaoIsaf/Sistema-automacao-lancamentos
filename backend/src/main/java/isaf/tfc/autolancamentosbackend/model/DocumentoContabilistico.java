@@ -1,5 +1,6 @@
 package isaf.tfc.autolancamentosbackend.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -32,6 +33,14 @@ public class DocumentoContabilistico {
     // SHA-256 (hex) dos bytes do ficheiro — aditivo, usado para impedir
     // que o mesmo documento seja carregado duas vezes (ver
     // DocumentoController.upload). Documentos antigos ficam com null.
+    // unique=true fecha a corrida entre dois uploads simultâneos do mesmo
+    // ficheiro: a verificação findByHashConteudo sozinha (leitura antes de
+    // qualquer escrita) não impede que ambos passem antes de qualquer um
+    // gravar — a constraint na base de dados garante isso mesmo quando
+    // dois pedidos chegam ao mesmo tempo. Postgres trata múltiplos NULL
+    // como não-conflituosos, por isso documentos antigos sem hash não são
+    // afectados.
+    @Column(unique = true)
     private String hashConteudo;
 
     // id do User que fez o upload; sem relação JPA para manter o padrão

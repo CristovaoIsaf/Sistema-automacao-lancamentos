@@ -12,6 +12,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Optional
 
+from services.document_requirements import DOCUMENT_REQUIREMENTS_VERSION, requisitos_para
+
 
 # ---------------------------------------------------------------------------
 # NORMALIZAÇÃO DE INCONSISTÊNCIAS DE OCR / FONTE
@@ -285,16 +287,14 @@ def extrair_dados_fatura(texto_bruto: str) -> DadosFatura:
     dados.via_original = bool(RE_VIA_ORIGINAL.search(texto))
 
     # --- Controle de qualidade ---
-    campos_obrigatorios = {
-        "emitente_nome": dados.emitente_nome,
-        "emitente_nif": dados.emitente_nif,
-        "adquirente_nif": dados.adquirente_nif,
-        "numero_fatura": dados.numero_fatura,
-        "data_emissao": dados.data_emissao,
-        "valor_total_aoa": dados.valor_total_aoa,
-        "codigo_hash": dados.codigo_hash,
-    }
-    dados.campos_nao_encontrados = [c for c, v in campos_obrigatorios.items() if not v]
+    # Campos obrigatórios dependem do tipo de documento (ver
+    # document_requirements.py) — uma factura e um recibo não têm as
+    # mesmas exigências, por isso não se usa a mesma checklist para
+    # ambos.
+    dados.campos_nao_encontrados = [
+        campo for campo in requisitos_para(dados.tipo_documento)
+        if not getattr(dados, campo)
+    ]
 
     return dados
 
@@ -315,6 +315,11 @@ def gerar_relatorio_qualidade(dados: DadosFatura) -> dict:
         "campos_faltantes": dados.campos_nao_encontrados,
         "nif_emitente_formato_valido": validar_nif_formato(dados.emitente_nif),
         "nif_adquirente_formato_valido": validar_nif_formato(dados.adquirente_nif),
+        # Versão da matriz de requisitos usada para calcular campos_faltantes
+        # (ver document_requirements.py) — um resultado antigo, calculado com
+        # uma matriz diferente, nunca deve ser confundido com um resultado
+        # actual sem se saber que a versão mudou.
+        "requisitos_versao": DOCUMENT_REQUIREMENTS_VERSION,
         "confianca_geral": (
             "alta" if not dados.campos_nao_encontrados
             else "media" if len(dados.campos_nao_encontrados) <= 2

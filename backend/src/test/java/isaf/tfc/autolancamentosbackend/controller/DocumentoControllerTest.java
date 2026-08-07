@@ -14,6 +14,8 @@ import isaf.tfc.autolancamentosbackend.repository.SugestaoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,7 +46,12 @@ class DocumentoControllerTest {
         entidadeRepository = Mockito.mock(EntidadeRepository.class);
         sugestaoRepository = Mockito.mock(SugestaoRepository.class);
         lancamentoRepository = Mockito.mock(LancamentoRepository.class);
-        controller = new DocumentoController(documentoRepository, entidadeRepository, sugestaoRepository, lancamentoRepository);
+
+        PlatformTransactionManager transactionManager = Mockito.mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(Mockito.any()))
+                .thenReturn(Mockito.mock(TransactionStatus.class));
+
+        controller = new DocumentoController(documentoRepository, entidadeRepository, sugestaoRepository, lancamentoRepository, transactionManager);
 
         utilizador = new User();
         utilizador.setId(1L);
@@ -168,6 +175,26 @@ class DocumentoControllerTest {
 
         assertThat(resposta.getStatusCode().value()).isEqualTo(409);
         Mockito.verify(documentoRepository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void upload_corridaNoSave_apanhaViolacaoDeIntegridadeEDevolve409() throws java.io.IOException {
+        // Simula dois uploads simultâneos do mesmo ficheiro: a verificação
+        // findByHashConteudo (leitura) não encontra nada, mas o save()
+        // (escrita) rebenta com a constraint UNIQUE porque outro pedido já
+        // gravou entretanto — exactamente o cenário reproduzido ao vivo
+        // nesta sessão.
+        org.springframework.web.multipart.MultipartFile ficheiro = Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        byte[] bytes = {1, 2, 3, 4};
+        when(ficheiro.isEmpty()).thenReturn(false);
+        when(ficheiro.getBytes()).thenReturn(bytes);
+        when(documentoRepository.findByHashConteudo(Mockito.anyString())).thenReturn(java.util.Optional.empty());
+        when(documentoRepository.save(Mockito.any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        var resposta = controller.upload(ficheiro, utilizador);
+
+        assertThat(resposta.getStatusCode().value()).isEqualTo(409);
     }
 
     private DocumentoContabilistico documentoComId(Long id, Long entidadeId) {

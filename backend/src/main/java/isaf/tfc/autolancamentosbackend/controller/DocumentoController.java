@@ -11,6 +11,7 @@ import isaf.tfc.autolancamentosbackend.repository.DocumentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.EntidadeRepository;
 import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.SugestaoRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -18,7 +19,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -46,15 +50,29 @@ public class DocumentoController {
     private final EntidadeRepository entidadeRepository;
     private final SugestaoRepository sugestaoRepository;
     private final LancamentoRepository lancamentoRepository;
+    private final TransactionTemplate novaTransacao;
 
     public DocumentoController(DocumentoRepository documentoRepository,
                                 EntidadeRepository entidadeRepository,
                                 SugestaoRepository sugestaoRepository,
-                                LancamentoRepository lancamentoRepository) {
+                                LancamentoRepository lancamentoRepository,
+                                PlatformTransactionManager transactionManager) {
         this.documentoRepository = documentoRepository;
         this.entidadeRepository = entidadeRepository;
         this.sugestaoRepository = sugestaoRepository;
         this.lancamentoRepository = lancamentoRepository;
+
+        // PROPAGATION_REQUIRES_NEW — usado só para o save() em upload(): se
+        // a constraint UNIQUE em hash_conteudo rebentar (dois uploads
+        // simultâneos do mesmo ficheiro), só esta transacção isolada é
+        // anulada. Com o save() dentro da mesma transacção que a leitura
+        // de pré-verificação (@Transactional no método upload), apanhar a
+        // excepção não chega — o Spring já marca a transacção inteira como
+        // rollback-only antes do catch, e o commit final rebenta com
+        // UnexpectedRollbackException (confirmado num teste real de corrida
+        // nesta sessão).
+        this.novaTransacao = new TransactionTemplate(transactionManager);
+        this.novaTransacao.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
@@ -86,12 +104,7 @@ public class DocumentoController {
 
         Optional<DocumentoContabilistico> existente = documentoRepository.findByHashConteudo(hash);
         if (existente.isPresent()) {
-            DocumentoContabilistico anterior = existente.get();
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                    "message", "Este documento já foi carregado anteriormente (\""
-                            + anterior.getNomeFicheiro() + "\", ID " + anterior.getId()
-                            + ", em " + anterior.getDataUpload() + ")."
-            ));
+            return conflitoDuplicado(existente.get());
         }
 
         DocumentoContabilistico documento = new DocumentoContabilistico();
@@ -101,8 +114,33 @@ public class DocumentoController {
         documento.setHashConteudo(hash);
         documento.setUserId(user.getId());
 
-        DocumentoContabilistico salvo = documentoRepository.save(documento);
-        return ResponseEntity.ok(salvo);
+        try {
+            // Transacção isolada (REQUIRES_NEW) — ver comentário no
+            // construtor sobre porque o save() não pode partilhar a
+            // transacção da verificação findByHashConteudo acima.
+            DocumentoContabilistico salvo = novaTransacao.execute(status -> documentoRepository.save(documento));
+            return ResponseEntity.ok(salvo);
+        } catch (DataIntegrityViolationException e) {
+            // Corrida: dois uploads simultâneos do mesmo ficheiro passam
+            // ambos pela verificação findByHashConteudo acima antes de
+            // qualquer um gravar — só a constraint UNIQUE em hash_conteudo
+            // (ver DocumentoContabilistico) apanha isto. Depois de uma
+            // violação de integridade a transacção já está abortada do
+            // lado do Postgres, por isso não se reconsulta a BD aqui — a
+            // mensagem fica genérica; o caso comum, sem corrida, já teve a
+            // mensagem detalhada acima.
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "message", "Este documento já foi carregado anteriormente (por outro pedido em simultâneo)."
+            ));
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> conflitoDuplicado(DocumentoContabilistico anterior) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "message", "Este documento já foi carregado anteriormente (\""
+                        + anterior.getNomeFicheiro() + "\", ID " + anterior.getId()
+                        + ", em " + anterior.getDataUpload() + ")."
+        ));
     }
 
     private String calcularHash(byte[] conteudo) {
