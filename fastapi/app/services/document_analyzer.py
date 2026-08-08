@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from config.settings import settings
 from services import anythingllm_client
+from services import entity_profile
 from services import pgc as pgc_ao
 from services.cache_versionado import CacheVersionado
 
@@ -76,7 +77,23 @@ class DocumentAnalyzer:
                 "Classificação por regras já é inequívoca (%s) — IA não chamada.",
                 classificacao_regras.get("tipo"),
             )
+            entity_profile.registrar_classificacao(
+                dados_fatura.get("emitente_nif"), classificacao_regras.get("tipo"), fingerprint
+            )
             resposta = self._montar_resposta(classificacao_regras, dados_fatura)
+            resposta["iaCacheHit"] = False
+            return resposta
+
+        # Fase 10 — antes de gastar uma chamada de IA, ver se a entidade
+        # emitente já tem um histórico consistente de classificação (ver
+        # entity_profile.py). Corre depois do gate da Fase 7 (só entra
+        # aqui quando as regras já não conseguiram decidir sozinhas).
+        classificacao_perfil = self._classificar_por_perfil_entidade(text, dados_fatura)
+        if classificacao_perfil is not None:
+            entity_profile.registrar_classificacao(
+                dados_fatura.get("emitente_nif"), classificacao_perfil.get("tipo"), fingerprint
+            )
+            resposta = self._montar_resposta(classificacao_perfil, dados_fatura)
             resposta["iaCacheHit"] = False
             return resposta
 
@@ -92,6 +109,10 @@ class DocumentAnalyzer:
             logger.error(f"Erro na classificação, a usar regras: {e}")
             classificacao = classificacao_regras
 
+        entity_profile.registrar_classificacao(
+            dados_fatura.get("emitente_nif"), classificacao.get("tipo"), fingerprint
+        )
+
         resposta = self._montar_resposta(classificacao, dados_fatura)
         resposta["iaCacheHit"] = ia_cache_hit
         return resposta
@@ -101,6 +122,29 @@ class DocumentAnalyzer:
         regras não conseguiu decidir o tipo de operação (caiu no valor
         genérico TIPO_A_CLASSIFICAR)."""
         return classificacao_regras.get("tipo") == pgc_ao.TIPO_A_CLASSIFICAR
+
+    def _classificar_por_perfil_entidade(
+        self, text: str, dados_fatura: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Fase 10 — se a entidade emitente já tem um histórico
+        consistente de classificação (ver entity_profile.py), reaproveita
+        essa tendência em vez de chamar a IA. None se não houver perfil
+        de confiança suficiente (poucos documentos, ou histórico misto)."""
+        nif = dados_fatura.get("emitente_nif")
+        tipo = entity_profile.tipo_dominante(nif)
+        if not tipo:
+            return None
+
+        logger.info(
+            "Entidade NIF=%s já tem classificação consistente (%s) — IA não chamada.", nif, tipo
+        )
+        return {
+            "tipo": tipo,
+            "descricao": (text or "")[:150].replace("\n", " ").strip(),
+            "confianca": 75,
+            "modelo": "perfil_entidade",
+            "fundamentacao": "",
+        }
 
     # ── Montagem do lançamento (contas sempre do pgc_ao) ─────────────────────
     def _montar_resposta(self, c: Dict[str, Any], dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
