@@ -197,6 +197,65 @@ class DocumentoControllerTest {
         assertThat(resposta.getStatusCode().value()).isEqualTo(409);
     }
 
+    @Test
+    void upload_mesmoConteudoPorContabilistaDiferente_aindaAssimDevolve409() throws java.io.IOException {
+        // Fase 13 — item 5 do mapa de impacto: Contabilista A carrega
+        // FT-001; Contabilista B (utilizador DIFERENTE) tenta carregar o
+        // mesmo ficheiro. A verificação de duplicado é global (por hash
+        // do conteúdo), não por utilizador — um documento duplicado é um
+        // erro contabilístico independente de quem o submete.
+        org.springframework.web.multipart.MultipartFile ficheiro = Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        when(ficheiro.isEmpty()).thenReturn(false);
+        when(ficheiro.getBytes()).thenReturn(new byte[]{9, 9, 9, 9});
+
+        DocumentoContabilistico existente = documentoComId(43L, null);
+        existente.setUserId(1L); // carregado originalmente pelo Contabilista A (utilizador desta suite)
+        existente.setNomeFicheiro("fatura-contabilista-a.png");
+        when(documentoRepository.findByHashConteudo(Mockito.anyString())).thenReturn(java.util.Optional.of(existente));
+
+        User contabilistaB = new User();
+        contabilistaB.setId(2L); // um SEGUNDO contabilista, diferente do dono do documento existente
+
+        var resposta = controller.upload(ficheiro, contabilistaB);
+
+        assertThat(resposta.getStatusCode().value()).isEqualTo(409);
+        Mockito.verify(documentoRepository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void upload_documentosSemelhantesMasDiferentes_saoAmbosAceites() throws java.io.IOException {
+        // Fase 13 — item 6: dois documentos parecidos (mesmo tipo de
+        // fatura, conteúdo ligeiramente diferente) NUNCA devem colidir —
+        // a deduplicação é por hash exacto dos bytes, não por
+        // semelhança, por isso qualquer diferença, por mais pequena,
+        // produz hashes diferentes e ambos são aceites.
+        org.springframework.web.multipart.MultipartFile ficheiroA = Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        when(ficheiroA.isEmpty()).thenReturn(false);
+        when(ficheiroA.getBytes()).thenReturn(new byte[]{1, 2, 3, 4});
+        when(ficheiroA.getOriginalFilename()).thenReturn("fatura-a.png");
+        when(ficheiroA.getContentType()).thenReturn("image/png");
+
+        org.springframework.web.multipart.MultipartFile ficheiroB = Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        when(ficheiroB.isEmpty()).thenReturn(false);
+        when(ficheiroB.getBytes()).thenReturn(new byte[]{1, 2, 3, 5}); // só 1 byte diferente
+        when(ficheiroB.getOriginalFilename()).thenReturn("fatura-b.png");
+        when(ficheiroB.getContentType()).thenReturn("image/png");
+
+        when(documentoRepository.findByHashConteudo(Mockito.anyString())).thenReturn(java.util.Optional.empty());
+        when(documentoRepository.save(Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var respostaA = controller.upload(ficheiroA, utilizador);
+        var respostaB = controller.upload(ficheiroB, utilizador);
+
+        assertThat(respostaA.getStatusCode().value()).isEqualTo(200);
+        assertThat(respostaB.getStatusCode().value()).isEqualTo(200);
+
+        org.mockito.ArgumentCaptor<DocumentoContabilistico> captor = org.mockito.ArgumentCaptor.forClass(DocumentoContabilistico.class);
+        Mockito.verify(documentoRepository, Mockito.times(2)).save(captor.capture());
+        List<DocumentoContabilistico> gravados = captor.getAllValues();
+        assertThat(gravados.get(0).getHashConteudo()).isNotEqualTo(gravados.get(1).getHashConteudo());
+    }
+
     private DocumentoContabilistico documentoComId(Long id, Long entidadeId) {
         DocumentoContabilistico documento = new DocumentoContabilistico();
         documento.setId(id);

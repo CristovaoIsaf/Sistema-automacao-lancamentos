@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from services import document_analyzer as document_analyzer_module
 from services import pgc as pgc_ao
 from services.document_analyzer import DocumentAnalyzer
 
@@ -61,3 +62,20 @@ def test_documento_inequivoco_por_regras_nao_consulta_cache_de_ia():
 
     ia_mock.assert_not_called()
     assert resultado["iaCacheHit"] is False
+
+
+def test_mudanca_de_versao_do_cache_de_ia_forca_nova_chamada():
+    """Fase 13 — item 9: usa a constante REAL AI_CACHE_VERSION (não uma
+    string arbitrária) para confirmar que uma mudança de versão do
+    prompt/cache de IA nunca reaproveita cegamente uma classificação
+    calculada com a versão anterior."""
+    analyzer = _criar_analyzer()
+    fingerprint = "fp-versao-ia-real"
+
+    with patch.object(analyzer, "_classificar_com_anythingllm", return_value=RESPOSTA_IA) as ia_mock:
+        analyzer.analyze_document(TEXTO_AMBIGUO, {"dados_fatura": {}}, fingerprint)
+
+        with patch.object(document_analyzer_module, "AI_CACHE_VERSION", "TFC-2026-vTESTE"):
+            analyzer.analyze_document(TEXTO_AMBIGUO, {"dados_fatura": {}}, fingerprint)
+
+    assert ia_mock.call_count == 2  # 2ª chamada não reaproveitou o cache da versão antiga

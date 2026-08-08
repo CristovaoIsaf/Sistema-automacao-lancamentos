@@ -164,3 +164,23 @@ def test_com_cache_sem_fingerprint_recalcula_sempre():
         validar_documento_com_cache(_fatura_valida(), None)
 
     assert espia.call_count == 2
+
+
+def test_mudanca_de_versao_do_motor_forca_recalculo():
+    """Fase 13 — item 9: usa a constante REAL VALIDATION_ENGINE_VERSION
+    (não uma string arbitrária) para confirmar que uma mudança na versão
+    do motor de validação invalida um resultado já em cache — não é só o
+    mecanismo genérico de cache_versionado.py, é esta ligação real."""
+    dados = _fatura_valida()
+    fingerprint = "fp-versao-motor-real"
+
+    validar_documento_com_cache(dados, fingerprint)  # popula o cache com a versão actual
+
+    with patch.object(document_validation, "VALIDATION_ENGINE_VERSION", "TFC-2026-vTESTE"):
+        with patch.object(
+            document_validation, "validar_documento", wraps=document_validation.validar_documento
+        ) as espia:
+            resultado = validar_documento_com_cache(dados, fingerprint)
+
+    espia.assert_called_once()  # não reaproveitou o cache da versão antiga
+    assert resultado.valido is True
