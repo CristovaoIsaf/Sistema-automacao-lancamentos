@@ -107,9 +107,12 @@ async def analisar(
     # fingerprint para reaproveitar a validação já calculada, se aplicável.
     extraido = ocr_service.extract_invoice_data(texto, fingerprint_final)
 
+    # Fase 9: passa o fingerprint para reaproveitar a classificação de IA
+    # já calculada, se este documento ambíguo já tiver sido analisado.
     analise = analyzer.analyze_document(
         texto,
         {"dados_fatura": extraido["dados"], "confidence": ocr_res.get("confidence", 0)},
+        fingerprint_final,
     )
 
     # Anexa contexto do OCR e o resultado da validação determinística

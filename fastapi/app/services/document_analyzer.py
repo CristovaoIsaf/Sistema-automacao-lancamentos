@@ -1,13 +1,25 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from config.settings import settings
 from services import anythingllm_client
 from services import pgc as pgc_ao
+from services.cache_versionado import CacheVersionado
 
 logger = logging.getLogger(__name__)
+
+# Fase 9 do mapa de impacto — evita repetir a chamada de IA (a mais lenta
+# e cara do pipeline) para reanálise do MESMO documento ambíguo (mesmo
+# fingerprint). Reaproveita o mecanismo genérico já usado pelas Fases 5/6
+# (cache_versionado.py) — não duplicar o mecanismo de cache uma terceira
+# vez. IMPORTANTE: sempre que _construir_prompt_classificacao mudar de
+# forma que altere o significado da pergunta (não só cosmética), subir
+# AI_CACHE_VERSION — senão uma resposta antiga, calculada com um prompt
+# diferente, seria confundida com uma actual.
+AI_CACHE_VERSION = "TFC-2026-v1"
+_cache_ia: CacheVersionado = CacheVersionado("ia")
 
 # Regra de ouro deste ficheiro:
 #   A IA (ou as regras) só CLASSIFICA o tipo de documento. Toda a extração
@@ -45,7 +57,9 @@ class DocumentAnalyzer:
             logger.info("AnythingLLM configurado com sucesso.")
 
     # ── Ponto de entrada ─────────────────────────────────────────────────────
-    def analyze_document(self, text: str, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze_document(
+        self, text: str, ocr_data: Dict[str, Any], fingerprint: Optional[str] = None
+    ) -> Dict[str, Any]:
         dados_fatura = ocr_data.get("dados_fatura", {}) or {}
 
         # Fase 7 do mapa de impacto — gate antes da IA: a classificação por
@@ -62,18 +76,25 @@ class DocumentAnalyzer:
                 "Classificação por regras já é inequívoca (%s) — IA não chamada.",
                 classificacao_regras.get("tipo"),
             )
-            return self._montar_resposta(classificacao_regras, dados_fatura)
+            resposta = self._montar_resposta(classificacao_regras, dados_fatura)
+            resposta["iaCacheHit"] = False
+            return resposta
 
+        ia_cache_hit = False
         try:
             if self.use_ai:
-                classificacao = self._classificar_com_anythingllm(text, dados_fatura)
+                classificacao, ia_cache_hit = self._classificar_com_anythingllm_cacheado(
+                    text, dados_fatura, fingerprint
+                )
             else:
                 classificacao = classificacao_regras
         except Exception as e:
             logger.error(f"Erro na classificação, a usar regras: {e}")
             classificacao = classificacao_regras
 
-        return self._montar_resposta(classificacao, dados_fatura)
+        resposta = self._montar_resposta(classificacao, dados_fatura)
+        resposta["iaCacheHit"] = ia_cache_hit
+        return resposta
 
     def _precisa_de_ia(self, classificacao_regras: Dict[str, Any]) -> bool:
         """Fase 7 — só é preciso chamar a IA quando a classificação por
@@ -162,6 +183,25 @@ class DocumentAnalyzer:
 
         logger.info("AnythingLLM (exemplos) classificou como: %s", dados.get("tipo"))
         return dados
+
+    def _classificar_com_anythingllm_cacheado(
+        self, text: str, dados_fatura: Dict[str, Any], fingerprint: Optional[str]
+    ) -> Tuple[Dict[str, Any], bool]:
+        """Fase 9: variante de _classificar_com_anythingllm que evita
+        repetir as DUAS chamadas de IA (classificação + fundamentação
+        legal) para o mesmo documento ambíguo já analisado antes. Sem
+        fingerprint, chama sempre a IA de novo — não há chave de cache
+        válida. Devolve (resultado, veio_do_cache)."""
+        if not fingerprint:
+            return self._classificar_com_anythingllm(text, dados_fatura), False
+
+        versao = f"{AI_CACHE_VERSION}:{settings.ANYTHINGLLM_WORKSPACE_EXEMPLOS}:{settings.ANYTHINGLLM_WORKSPACE_NORMAS}"
+        resultado, veio_do_cache = _cache_ia.obter_ou_calcular(
+            fingerprint, versao, lambda: self._classificar_com_anythingllm(text, dados_fatura)
+        )
+        if veio_do_cache:
+            logger.info("Classificação de IA reaproveitada do cache (fingerprint=%s).", fingerprint)
+        return resultado, veio_do_cache
 
     # Fase 8 do mapa de impacto — otimização do prompt: só chega aqui quando
     # o gate da Fase 7 já decidiu que a IA é mesmo necessária (regras não
