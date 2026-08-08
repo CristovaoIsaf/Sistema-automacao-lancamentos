@@ -40,4 +40,12 @@ public class AnaliseResponse {
     // antigas em cache/teste sem esta chave ficam com null, tratado como
     // "sem informação de validação" pelo lado que consome isto.
     private ValidacaoDTO validacao;
+
+    // Fingerprint (SHA-256) usado por esta análise (Fase 4 — ver
+    // fastapi/app/services/document_fingerprint.py): o mesmo que foi
+    // enviado no pedido, ou calculado pelo FastAPI se não tiver sido
+    // enviado. Não é persistido de novo em Sugestao — já está disponível
+    // via Documento.hashConteudo (mesmo documentoId); serve aqui só para
+    // confirmar/depurar o valor realmente usado nesta análise.
+    private String fingerprint;
 }

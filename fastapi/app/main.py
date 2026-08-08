@@ -1,8 +1,11 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from typing import Optional
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
+from services.document_fingerprint import calcular_fingerprint
 from services.ocr_service import OCRService
 from services.document_analyzer import DocumentAnalyzer
 
@@ -60,7 +63,11 @@ async def ocr(ficheiro: UploadFile = File(...), preprocess: bool = True):
 
 @app.post("/analisar")
 @app.post("/api/v1/analisar")
-async def analisar(ficheiro: UploadFile = File(...), preprocess: bool = True):
+async def analisar(
+    ficheiro: UploadFile = File(...),
+    preprocess: bool = True,
+    fingerprint: Optional[str] = Form(None),
+):
     """
     PIPELINE REAL (substitui os dados fixos anteriores):
       1. OCR do ficheiro recebido (imagem ou PDF).
@@ -68,14 +75,26 @@ async def analisar(ficheiro: UploadFile = File(...), preprocess: bool = True):
       3. Classificação do tipo (Gemini com fallback a regras).
       4. Geração do lançamento por partidas dobradas com contas do Decreto 82/01.
     O backend Spring envia aqui os bytes do documento (multipart 'ficheiro').
+
+    `fingerprint` (Fase 4 — ver services/document_fingerprint.py): o
+    backend Java já calculou o SHA-256 do documento no upload
+    (DocumentoContabilistico.hashConteudo) e envia-o aqui para não
+    recalcular à toa nem arriscar duas implementações divergirem — é
+    opcional só para permitir chamar este endpoint directamente (fora do
+    fluxo Java), caso em que é calculado aqui como fallback.
     """
     conteudo = await ficheiro.read()
     if not conteudo:
         raise HTTPException(status_code=400, detail="Ficheiro vazio.")
 
-    # Tesseract é bloqueante — corre numa threadpool.
+    fingerprint_final = fingerprint or calcular_fingerprint(conteudo)
+
+    # Tesseract é bloqueante — corre numa threadpool. Fase 5: usa a
+    # variante com cache, que evita repetir o OCR se este fingerprint já
+    # tiver sido processado antes (ex: reanálise do mesmo documento).
     ocr_res = await run_in_threadpool(
-        ocr_service.extract_text_from_bytes, conteudo, ficheiro.filename, preprocess
+        ocr_service.extract_text_from_bytes_cacheado,
+        conteudo, ficheiro.filename, preprocess, fingerprint_final,
     )
     if not ocr_res.get("success"):
         raise HTTPException(status_code=400, detail=ocr_res.get("error", "Erro no OCR"))
@@ -84,8 +103,9 @@ async def analisar(ficheiro: UploadFile = File(...), preprocess: bool = True):
     # extract_invoice_data (não a extract_accounting_data antiga, que só
     # devolvia 4 campos "por compatibilidade") — dá ao analyzer os dados já
     # tratados por regex (emitente, adquirente, nº fatura, valor, IVA...),
-    # para a IA não ter de os re-extrair do texto em bruto.
-    extraido = ocr_service.extract_invoice_data(texto)
+    # para a IA não ter de os re-extrair do texto em bruto. Fase 6: passa o
+    # fingerprint para reaproveitar a validação já calculada, se aplicável.
+    extraido = ocr_service.extract_invoice_data(texto, fingerprint_final)
 
     analise = analyzer.analyze_document(
         texto,
@@ -98,4 +118,6 @@ async def analisar(ficheiro: UploadFile = File(...), preprocess: bool = True):
     analise["textoOcr"] = texto[:5000]
     analise["confiancaOcr"] = ocr_res.get("confidence", 0)
     analise["validacao"] = extraido["validacao"]
+    analise["fingerprint"] = fingerprint_final
+    analise["ocrCacheHit"] = ocr_res.get("cache_hit", False)
     return analise

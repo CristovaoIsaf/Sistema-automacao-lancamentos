@@ -30,7 +30,7 @@ public class FastApiAnaliseClient implements AnalisadorDocumentoIA {
     }
 
     @Override
-    public AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro) {
+    public AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro, String fingerprint) {
         ByteArrayResource resource = new ByteArrayResource(conteudo) {
             @Override
             public String getFilename() {
@@ -43,6 +43,11 @@ public class FastApiAnaliseClient implements AnalisadorDocumentoIA {
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("ficheiro", new HttpEntity<>(resource, ficheiroHeaders));
+        // Fase 4 — ver AnalisadorDocumentoIA.analisar: reenvia o hash já
+        // calculado no upload em vez de deixar o FastAPI recalculá-lo.
+        if (fingerprint != null && !fingerprint.isBlank()) {
+            body.add("fingerprint", fingerprint);
+        }
 
         try {
             return fastApiRestClient.post()

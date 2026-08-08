@@ -51,7 +51,7 @@ public class AnaliseContabilService {
                 .orElseThrow(() -> new RuntimeException("Documento não encontrado: " + documentoId));
 
         AnaliseResponse analise = analisadorDocumentoIA.analisar(
-                documento.getConteudo(), documento.getNomeFicheiro());
+                documento.getConteudo(), documento.getNomeFicheiro(), documento.getHashConteudo());
 
         if (analise == null) {
             throw new RuntimeException("A API de análise devolveu uma resposta vazia.");

@@ -1,7 +1,7 @@
 import io
 import logging
 from dataclasses import asdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
@@ -10,7 +10,8 @@ from PIL import Image
 from pdf2image import convert_from_bytes
 
 from config.settings import settings
-from services.document_validation import validar_documento
+from services.cache_versionado import CacheVersionado
+from services.document_validation import validar_documento_com_cache
 from services.regex_extract import (
     extrair_dados_fatura,
     gerar_relatorio_qualidade,
@@ -18,6 +19,13 @@ from services.regex_extract import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Fase 5 do mapa de impacto — evita repetir OCR (Tesseract, o passo mais
+# lento do pipeline) para um documento já processado antes com o mesmo
+# fingerprint. A versão de cache inclui idioma/pré-processamento porque
+# alteram o resultado do OCR para os MESMOS bytes.
+OCR_CACHE_VERSION = "TFC-2026-v1"
+_cache_ocr: CacheVersionado = CacheVersionado("ocr")
 
 
 class OCRService:
@@ -114,6 +122,25 @@ class OCRService:
             logger.error(f"Erro no OCR de {filename}: {e}")
             return {"success": False, "error": str(e)}
 
+    def extract_text_from_bytes_cacheado(
+        self, conteudo: bytes, filename: str, preprocess: bool, fingerprint: Optional[str]
+    ) -> Dict[str, Any]:
+        """Fase 5: variante de extract_text_from_bytes que evita repetir o
+        OCR para o mesmo fingerprint (ex: reanálise do mesmo documento).
+        Sem fingerprint, corre sempre o OCR de novo — não há chave de
+        cache válida. Devolve o mesmo formato de extract_text_from_bytes
+        com uma chave adicional "cache_hit"."""
+        if not fingerprint:
+            resultado = self.extract_text_from_bytes(conteudo, filename, preprocess)
+            return {**resultado, "cache_hit": False}
+
+        versao = f"{OCR_CACHE_VERSION}:{self.lang}:{preprocess}"
+        resultado, veio_do_cache = _cache_ocr.obter_ou_calcular(
+            fingerprint, versao,
+            lambda: self.extract_text_from_bytes(conteudo, filename, preprocess),
+        )
+        return {**resultado, "cache_hit": veio_do_cache}
+
     def _extract_from_image_bytes(self, conteudo: bytes, preprocess: bool) -> Dict[str, Any]:
         pil_image = Image.open(io.BytesIO(conteudo)).convert("RGB")
         image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
@@ -164,7 +191,7 @@ class OCRService:
             "tipo_documento": dados.tipo_documento,
         }
 
-    def extract_invoice_data(self, text: str) -> Dict[str, Any]:
+    def extract_invoice_data(self, text: str, fingerprint: Optional[str] = None) -> Dict[str, Any]:
         """
         Extração completa e estruturada de fatura fiscal (padrão AGT):
         emitente, adquirente, NIFs (por proximidade ao rótulo, com fallback
@@ -173,18 +200,23 @@ class OCRService:
 
         Use este método quando precisar de todos os campos — o
         `extract_accounting_data` acima existe só por compatibilidade.
+
+        `fingerprint` (Fase 6, opcional): quando fornecido, o resultado da
+        validação determinística é reaproveitado do cache se este mesmo
+        documento já tiver sido validado antes (ver
+        document_validation.validar_documento_com_cache).
         """
         if not text:
             vazio = _dados_vazios()
             return {
                 "dados": asdict(vazio),
                 "qualidade": {"campos_faltantes": [], "confianca_geral": "baixa"},
-                "validacao": validar_documento(vazio).to_dict(),
+                "validacao": validar_documento_com_cache(vazio, fingerprint).to_dict(),
             }
 
         dados = extrair_dados_fatura(text)
         qualidade = gerar_relatorio_qualidade(dados)
-        validacao = validar_documento(dados)
+        validacao = validar_documento_com_cache(dados, fingerprint)
 
         return {"dados": asdict(dados), "qualidade": qualidade, "validacao": validacao.to_dict()}
 

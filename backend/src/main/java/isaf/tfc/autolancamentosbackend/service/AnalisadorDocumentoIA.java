@@ -9,5 +9,14 @@ import isaf.tfc.autolancamentosbackend.dto.AnaliseResponse;
  */
 public interface AnalisadorDocumentoIA {
 
-    AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro);
+    /**
+     * `fingerprint` (Fase 4 do mapa de impacto — ver
+     * fastapi/app/services/document_fingerprint.py): identidade de
+     * conteúdo já calculada no upload (DocumentoContabilistico.hashConteudo),
+     * reenviada aqui para o FastAPI não ter de recalculá-la e para servir de
+     * chave estável ao cache de OCR/validação das próximas fases. Pode ser
+     * null (ex. chamadas fora do fluxo de upload normal) — nesse caso o
+     * FastAPI calcula-a a partir dos bytes recebidos.
+     */
+    AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro, String fingerprint);
 }

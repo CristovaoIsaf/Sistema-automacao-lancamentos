@@ -22,6 +22,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Callable, List, Optional
 
+from services.cache_versionado import CacheVersionado
 from services.pgc import TAXAS_IVA_RECONHECIDAS
 from services.regex_extract import DadosFatura, validar_nif_formato
 
@@ -244,3 +245,25 @@ def validar_documento(dados: DadosFatura) -> ResultadoValidacao:
     for regra in REGRAS:
         problemas.extend(regra(dados))
     return ResultadoValidacao(problemas=problemas)
+
+
+# Fase 6 do mapa de impacto — evita recalcular a validação para o mesmo
+# documento (mesmo fingerprint) já visto antes (ex: reanálise). Indexado
+# também por VALIDATION_ENGINE_VERSION (ver CacheVersionado): se as regras
+# mudarem, uma entrada antiga nunca é confundida com uma calculada pelas
+# regras actuais.
+_cache_validacao: CacheVersionado = CacheVersionado("validacao")
+
+
+def validar_documento_com_cache(dados: DadosFatura, fingerprint: Optional[str]) -> ResultadoValidacao:
+    """Variante de validar_documento que reaproveita o resultado do cache
+    quando `fingerprint` já foi validado antes com a versão actual das
+    regras. Sem fingerprint, calcula sempre de novo — não há chave de
+    cache válida (chamador fora do fluxo normal de análise)."""
+    if not fingerprint:
+        return validar_documento(dados)
+
+    resultado, _ = _cache_validacao.obter_ou_calcular(
+        fingerprint, VALIDATION_ENGINE_VERSION, lambda: validar_documento(dados)
+    )
+    return resultado

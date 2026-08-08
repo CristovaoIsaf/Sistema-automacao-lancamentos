@@ -1,4 +1,7 @@
-from services.document_validation import validar_documento
+from unittest.mock import patch
+
+from services import document_validation
+from services.document_validation import validar_documento, validar_documento_com_cache
 from services.regex_extract import DadosFatura, extrair_dados_fatura
 
 
@@ -137,3 +140,27 @@ def test_to_dict_tem_forma_estavel():
     payload = resultado.to_dict()
     assert set(payload.keys()) == {"valido", "versao", "problemas"}
     assert payload["problemas"][0].keys() == {"campo", "codigo", "mensagem", "gravidade"}
+
+
+# ── Cache de validação (Fase 6) ─────────────────────────────────────────
+
+def test_com_cache_segunda_chamada_com_mesmo_fingerprint_nao_recalcula():
+    with patch.object(
+        document_validation, "validar_documento", wraps=document_validation.validar_documento
+    ) as espia:
+        r1 = validar_documento_com_cache(_fatura_valida(), "fp-cache-1")
+        r2 = validar_documento_com_cache(_fatura_valida(), "fp-cache-1")
+
+    assert espia.call_count == 1
+    assert r1.valido is True
+    assert r2.valido is True
+
+
+def test_com_cache_sem_fingerprint_recalcula_sempre():
+    with patch.object(
+        document_validation, "validar_documento", wraps=document_validation.validar_documento
+    ) as espia:
+        validar_documento_com_cache(_fatura_valida(), None)
+        validar_documento_com_cache(_fatura_valida(), None)
+
+    assert espia.call_count == 2
