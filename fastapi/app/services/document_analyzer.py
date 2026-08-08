@@ -48,16 +48,38 @@ class DocumentAnalyzer:
     def analyze_document(self, text: str, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
         dados_fatura = ocr_data.get("dados_fatura", {}) or {}
 
+        # Fase 7 do mapa de impacto — gate antes da IA: a classificação por
+        # regras é determinística, sem I/O e praticamente grátis — corre-se
+        # sempre primeiro. Só se as regras não conseguirem decidir (caem em
+        # TIPO_A_CLASSIFICAR, nenhuma palavra-chave reconhecida) é que vale a
+        # pena gastar uma chamada de IA a tentar desambiguar. Quando as
+        # regras já reconheceram um padrão claro, esse resultado é usado tal
+        # como está — a IA não traria mais informação nesse caso.
+        classificacao_regras = self._classificar_com_regras(text, dados_fatura)
+
+        if not self._precisa_de_ia(classificacao_regras):
+            logger.info(
+                "Classificação por regras já é inequívoca (%s) — IA não chamada.",
+                classificacao_regras.get("tipo"),
+            )
+            return self._montar_resposta(classificacao_regras, dados_fatura)
+
         try:
             if self.use_ai:
                 classificacao = self._classificar_com_anythingllm(text, dados_fatura)
             else:
-                classificacao = self._classificar_com_regras(text, dados_fatura)
+                classificacao = classificacao_regras
         except Exception as e:
             logger.error(f"Erro na classificação, a usar regras: {e}")
-            classificacao = self._classificar_com_regras(text, dados_fatura)
+            classificacao = classificacao_regras
 
         return self._montar_resposta(classificacao, dados_fatura)
+
+    def _precisa_de_ia(self, classificacao_regras: Dict[str, Any]) -> bool:
+        """Fase 7 — só é preciso chamar a IA quando a classificação por
+        regras não conseguiu decidir o tipo de operação (caiu no valor
+        genérico TIPO_A_CLASSIFICAR)."""
+        return classificacao_regras.get("tipo") == pgc_ao.TIPO_A_CLASSIFICAR
 
     # ── Montagem do lançamento (contas sempre do pgc_ao) ─────────────────────
     def _montar_resposta(self, c: Dict[str, Any], dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
