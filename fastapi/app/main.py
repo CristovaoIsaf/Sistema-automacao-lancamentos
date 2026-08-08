@@ -109,7 +109,14 @@ async def analisar(
 
     # Fase 9: passa o fingerprint para reaproveitar a classificação de IA
     # já calculada, se este documento ambíguo já tiver sido analisado.
-    analise = analyzer.analyze_document(
+    # Fase 11 — concorrência: analyze_document pode chamar a IA
+    # (httpx síncrono, ver anythingllm_client.py) e demorar dezenas de
+    # segundos. Sem run_in_threadpool, essa chamada bloquearia o event
+    # loop do Uvicorn inteiro — TODOS os outros pedidos (incluindo
+    # documentos completamente independentes, resolvíveis só por regras)
+    # ficariam parados atrás desta única análise lenta.
+    analise = await run_in_threadpool(
+        analyzer.analyze_document,
         texto,
         {"dados_fatura": extraido["dados"], "confidence": ocr_res.get("confidence", 0)},
         fingerprint_final,
