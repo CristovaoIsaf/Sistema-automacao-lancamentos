@@ -27,3 +27,6 @@ google-genai==1.5.0
 
 # Utilitários
 python-dateutil==2.9.0.post0
+
+# Testes
+pytest==8.3.4

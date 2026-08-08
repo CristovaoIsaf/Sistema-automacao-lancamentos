@@ -34,6 +34,24 @@ export interface Sugestao {
   // lançamento (ver LancamentoDiario.tsx).
   linhasJson?: string | null;
   fundamentacao?: string | null;
+  // Resultado do motor de validação determinística (Fase 3 — ver
+  // fastapi/app/services/document_validation.py), serializado em JSON.
+  // Usar parseValidacao (components/ValidacaoDocumento.tsx) antes de
+  // mostrar — null para sugestões antigas, gravadas antes desta fase.
+  validacaoJson?: string | null;
   lancamentoId?: number | null;
   estado: string;
+}
+
+export interface ProblemaValidacao {
+  campo: string;
+  codigo: string;
+  mensagem: string;
+  gravidade: 'erro' | 'aviso';
+}
+
+export interface ResultadoValidacao {
+  valido: boolean;
+  versao: string;
+  problemas: ProblemaValidacao[];
 }

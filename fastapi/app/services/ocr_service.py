@@ -10,6 +10,7 @@ from PIL import Image
 from pdf2image import convert_from_bytes
 
 from config.settings import settings
+from services.document_validation import validar_documento
 from services.regex_extract import (
     extrair_dados_fatura,
     gerar_relatorio_qualidade,
@@ -174,15 +175,18 @@ class OCRService:
         `extract_accounting_data` acima existe só por compatibilidade.
         """
         if not text:
+            vazio = _dados_vazios()
             return {
-                "dados": asdict(_dados_vazios()),
+                "dados": asdict(vazio),
                 "qualidade": {"campos_faltantes": [], "confianca_geral": "baixa"},
+                "validacao": validar_documento(vazio).to_dict(),
             }
 
         dados = extrair_dados_fatura(text)
         qualidade = gerar_relatorio_qualidade(dados)
+        validacao = validar_documento(dados)
 
-        return {"dados": asdict(dados), "qualidade": qualidade}
+        return {"dados": asdict(dados), "qualidade": qualidade, "validacao": validacao.to_dict()}
 
     def process_document(
         self, conteudo: bytes, filename: str, preprocess: bool = True

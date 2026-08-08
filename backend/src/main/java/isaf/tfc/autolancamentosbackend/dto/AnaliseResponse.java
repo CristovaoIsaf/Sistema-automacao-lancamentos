@@ -34,4 +34,10 @@ public class AnaliseResponse {
     // Categoria do plano de contas (ver CategoriaContaController) inferida
     // a partir do tipoDocumento — ver pgc_ao.categoria_do_tipo no FastAPI.
     private String categoria;
+
+    // Resultado do motor de validação determinística (Fase 3 — ver
+    // fastapi/app/services/document_validation.py). Aditivo: respostas
+    // antigas em cache/teste sem esta chave ficam com null, tratado como
+    // "sem informação de validação" pelo lado que consome isto.
+    private ValidacaoDTO validacao;
 }

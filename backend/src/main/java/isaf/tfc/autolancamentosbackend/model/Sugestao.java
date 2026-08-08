@@ -63,6 +63,13 @@ public class Sugestao {
     @Column(name = "fundamentacao", columnDefinition = "TEXT")
     private String fundamentacao;
 
+    // Resultado do motor de validação determinística (Fase 3 — ver
+    // fastapi/app/services/document_validation.py), serializado em JSON,
+    // tal como linhasJson. Aditiva: sugestões antigas ficam com null, o
+    // frontend trata isso como "sem informação de validação".
+    @Column(name = "validacao_json", columnDefinition = "TEXT")
+    private String validacaoJson;
+
     @Enumerated(EnumType.STRING)
     private EstadoSugestao estado;
 

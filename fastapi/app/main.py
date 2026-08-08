@@ -92,7 +92,10 @@ async def analisar(ficheiro: UploadFile = File(...), preprocess: bool = True):
         {"dados_fatura": extraido["dados"], "confidence": ocr_res.get("confidence", 0)},
     )
 
-    # Anexa contexto do OCR para revisão humana no frontend.
+    # Anexa contexto do OCR e o resultado da validação determinística
+    # (Fase 3 — ver services/document_validation.py) para revisão humana
+    # no frontend.
     analise["textoOcr"] = texto[:5000]
     analise["confiancaOcr"] = ocr_res.get("confidence", 0)
+    analise["validacao"] = extraido["validacao"]
     return analise

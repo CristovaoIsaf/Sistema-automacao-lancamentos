@@ -11,6 +11,8 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.ByteBuffer;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,8 +58,16 @@ class DocumentoRbacTest {
     void upload_comTokenDeContabilista_ePermitido() throws Exception {
         String token = criarUtilizadorETokenComPapel(Role.CONTABILISTA, "contabilista-rbac-teste@exemplo.com");
 
+        // Conteúdo com bytes únicos por execução (não {1,2,3} fixo): o
+        // upload() grava o hash numa transacção PROPAGATION_REQUIRES_NEW
+        // (ver DocumentoController) que COMMITA de facto e não é revertida
+        // pelo @Transactional deste teste — um valor fixo colide com o
+        // documento já persistido por uma execução anterior deste mesmo
+        // teste (409 em vez de 200). Mesmo raciocínio já usado abaixo para
+        // o NIF em criarUtilizadorETokenComPapel.
+        byte[] conteudoUnico = ByteBuffer.allocate(8).putLong(System.nanoTime()).array();
         MockMultipartFile ficheiro = new MockMultipartFile(
-                "file", "teste.png", "image/png", new byte[]{1, 2, 3});
+                "file", "teste.png", "image/png", conteudoUnico);
 
         mockMvc.perform(multipart("/documentos")
                         .file(ficheiro)

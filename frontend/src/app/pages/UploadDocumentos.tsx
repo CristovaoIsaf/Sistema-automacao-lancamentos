@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { uploadDocumento } from '../api/documentoApi';
 import { analisarDocumento } from '../api/sugestaoApi';
 import type { Sugestao } from '../types/documento';
+import { ValidacaoDocumento } from '../components/ValidacaoDocumento';
 
 export function UploadDocumentos() {
   const navigate = useNavigate();
@@ -175,6 +176,7 @@ export function UploadDocumentos() {
                 <div><span className="font-semibold text-[#0F172A]">Valor:</span> {analise.valor}</div>
                 <div><span className="font-semibold text-[#0F172A]">Descrição:</span> {analise.descricao}</div>
                 <div><span className="font-semibold text-[#0F172A]">Estado:</span> {analise.estado}</div>
+                <ValidacaoDocumento validacaoJson={analise.validacaoJson} />
                 {analise.estado === 'PENDENTE' && (
                   <button
                     onClick={reverEAprovar}

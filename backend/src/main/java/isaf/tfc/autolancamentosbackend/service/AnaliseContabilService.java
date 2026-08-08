@@ -7,6 +7,7 @@ import isaf.tfc.autolancamentosbackend.dto.AprovarSugestaoRequest;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaSugeridaDTO;
+import isaf.tfc.autolancamentosbackend.dto.ValidacaoDTO;
 import isaf.tfc.autolancamentosbackend.model.*;
 import isaf.tfc.autolancamentosbackend.repository.DocumentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
@@ -68,6 +69,7 @@ public class AnaliseContabilService {
         sugestao.setLinhasJson(serializarLinhas(analise.getLinhas()));
         sugestao.setFundamentacao(analise.getFundamentacao());
         sugestao.setCategoria(analise.getCategoria());
+        sugestao.setValidacaoJson(serializarValidacao(analise.getValidacao()));
         sugestao.setEstado(EstadoSugestao.PENDENTE);
 
         Sugestao salva = sugestaoRepository.save(sugestao);
@@ -229,6 +231,17 @@ public class AnaliseContabilService {
         dto.setLinhas(linhas);
 
         return dto;
+    }
+
+    private String serializarValidacao(ValidacaoDTO validacao) {
+        if (validacao == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(validacao);
+        } catch (JacksonException e) {
+            throw new RuntimeException("Não foi possível guardar o resultado da validação: " + e.getMessage(), e);
+        }
     }
 
     private String serializarLinhas(List<LinhaSugeridaDTO> linhas) {

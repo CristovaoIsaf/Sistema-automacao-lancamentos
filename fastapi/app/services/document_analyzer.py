@@ -109,12 +109,13 @@ class DocumentAnalyzer:
         return nome, nif
 
     def _taxa_iva_tratada(self, dados_fatura: Dict[str, Any]) -> str:
-        """Só reconhece 14% ou 7% (as taxas de IVA em vigor em Angola
-        tratadas por este projeto) entre as taxas já detetadas por regex em
-        regex_extract.taxas_iva_encontradas — fonte única, sem re-extrair."""
+        """Só reconhece as taxas de IVA em pgc_ao.TAXAS_IVA_RECONHECIDAS
+        (fonte única — 14%/7%, as taxas em vigor em Angola tratadas por
+        este projeto) entre as taxas já detetadas por regex em
+        regex_extract.taxas_iva_encontradas — sem re-extrair."""
         for taxa in dados_fatura.get("taxas_iva_encontradas") or []:
             taxa_normalizada = str(taxa).replace(",", ".").split(".")[0]
-            if taxa_normalizada in ("14", "7"):
+            if taxa_normalizada in pgc_ao.TAXAS_IVA_RECONHECIDAS:
                 return taxa_normalizada
         return ""
 

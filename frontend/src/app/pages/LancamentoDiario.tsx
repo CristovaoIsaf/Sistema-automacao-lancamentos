@@ -9,6 +9,7 @@ import { listarCategoriasConta } from '../api/categoriaContaApi';
 import type { CategoriaConta, ContaResumo } from '../types/categoriaConta';
 import type { LancamentoResponse } from '../types/lancamento';
 import type { Sugestao } from '../types/documento';
+import { ValidacaoDocumento } from '../components/ValidacaoDocumento';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -300,6 +301,10 @@ export function LancamentoDiario() {
             Os dados abaixo foram pré-carregados; confirma ou ajusta antes de aprovar.
           </p>
         </div>
+      )}
+
+      {sugestaoAtual && sugestaoAtual.estado === 'PENDENTE' && (
+        <ValidacaoDocumento validacaoJson={sugestaoAtual.validacaoJson} />
       )}
 
       <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
