@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -6,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
 from services.document_fingerprint import calcular_fingerprint
+from services.metricas import metricas
 from services.ocr_service import OCRService
 from services.document_analyzer import DocumentAnalyzer
 
@@ -39,6 +41,14 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/metricas")
+def obter_metricas():
+    """Fase 12 — contadores e tempos médios agregados desde o arranque
+    deste processo (ver services/metricas.py). Só para inspeção/depuração
+    (thesis), não é um endpoint de produção com autenticação."""
+    return metricas.resumo()
 
 
 @app.post("/ocr")
@@ -83,6 +93,8 @@ async def analisar(
     opcional só para permitir chamar este endpoint directamente (fora do
     fluxo Java), caso em que é calculado aqui como fallback.
     """
+    inicio_total = time.monotonic()
+
     conteudo = await ficheiro.read()
     if not conteudo:
         raise HTTPException(status_code=400, detail="Ficheiro vazio.")
@@ -92,11 +104,16 @@ async def analisar(
     # Tesseract é bloqueante — corre numa threadpool. Fase 5: usa a
     # variante com cache, que evita repetir o OCR se este fingerprint já
     # tiver sido processado antes (ex: reanálise do mesmo documento).
+    inicio_ocr = time.monotonic()
     ocr_res = await run_in_threadpool(
         ocr_service.extract_text_from_bytes_cacheado,
         conteudo, ficheiro.filename, preprocess, fingerprint_final,
     )
+    metricas.registar_duracao("ocr", time.monotonic() - inicio_ocr)
+    metricas.incrementar("ocr_cache_hit" if ocr_res.get("cache_hit") else "ocr_cache_miss")
+
     if not ocr_res.get("success"):
+        metricas.incrementar("analises_falhadas_ocr")
         raise HTTPException(status_code=400, detail=ocr_res.get("error", "Erro no OCR"))
 
     texto = ocr_res.get("text", "") or ""
@@ -115,12 +132,26 @@ async def analisar(
     # loop do Uvicorn inteiro — TODOS os outros pedidos (incluindo
     # documentos completamente independentes, resolvíveis só por regras)
     # ficariam parados atrás desta única análise lenta.
+    inicio_classificacao = time.monotonic()
     analise = await run_in_threadpool(
         analyzer.analyze_document,
         texto,
         {"dados_fatura": extraido["dados"], "confidence": ocr_res.get("confidence", 0)},
         fingerprint_final,
     )
+    metricas.registar_duracao("classificacao", time.monotonic() - inicio_classificacao)
+
+    # Fase 12 — de onde veio a classificação (ver document_analyzer.py):
+    # "regras" (gate da Fase 7), "perfil_entidade" (Fase 10), ou
+    # "anythingllm:..." (Fase 9 — cache ou chamada real, ver iaCacheHit).
+    # Mede o que cada fase anterior está realmente a poupar.
+    modelo = analise.get("modelo") or ""
+    if modelo == "regras":
+        metricas.incrementar("gate_regras")
+    elif modelo == "perfil_entidade":
+        metricas.incrementar("gate_perfil_entidade")
+    elif modelo.startswith("anythingllm"):
+        metricas.incrementar("gate_ia_cache_hit" if analise.get("iaCacheHit") else "gate_ia_chamada_real")
 
     # Anexa contexto do OCR e o resultado da validação determinística
     # (Fase 3 — ver services/document_validation.py) para revisão humana
@@ -130,4 +161,9 @@ async def analisar(
     analise["validacao"] = extraido["validacao"]
     analise["fingerprint"] = fingerprint_final
     analise["ocrCacheHit"] = ocr_res.get("cache_hit", False)
+
+    validacao = extraido["validacao"] or {}
+    metricas.incrementar("validacao_valida" if validacao.get("valido") else "validacao_invalida")
+    metricas.incrementar("analises_total")
+    metricas.registar_duracao("analisar_total", time.monotonic() - inicio_total)
     return analise
