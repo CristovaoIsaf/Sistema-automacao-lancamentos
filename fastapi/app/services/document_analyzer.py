@@ -148,29 +148,11 @@ class DocumentAnalyzer:
     #   2) NORMAS só é consultado depois, para fundamentar legalmente o tipo
     #      já decidido — falha aqui não deita fora uma classificação válida.
     def _classificar_com_anythingllm(self, text: str, dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
-        texto = (text or "")[:2000]
-
-        prompt = f"""Você é um especialista em contabilidade angolana (PGC-AO, Decreto n.º 82/01).
-
-Os dados abaixo já foram extraídos do documento de forma determinística (regex) — não os reinterprete nem tente corrigi-los. A sua única tarefa é CLASSIFICAR o tipo de operação contabilística deste documento. Não indique contas contabilísticas nem valores — isso já está tratado.
-
-DADOS JÁ EXTRAÍDOS:
-- Emitente: {dados_fatura.get('emitente_nome') or '(não identificado)'} (NIF {dados_fatura.get('emitente_nif') or '?'})
-- Adquirente: {dados_fatura.get('adquirente_nome') or '(não identificado)'} (NIF {dados_fatura.get('adquirente_nif') or '?'})
-- Nº documento: {dados_fatura.get('numero_fatura') or '?'}
-- Valor total: {dados_fatura.get('valor_total_aoa') or '?'} AOA
-- Data: {dados_fatura.get('data_emissao') or '?'}
-- Rótulo do tipo de documento detetado no texto: {dados_fatura.get('tipo_documento') or 'desconhecido'}
-
-EXCERTO DO TEXTO (só para contexto/desambiguação, não para extrair dados novos):
-{texto}
-
-Responda APENAS com JSON válido, sem texto à volta, neste formato exacto:
-{{
-  "tipo": "um de: compra_mercadoria, compra_servico, venda_mercadoria, prestacao_servico, pagamento_fornecedor, recebimento_cliente, a_classificar",
-  "descricao": "descrição curta do documento",
-  "confianca": 0
-}}"""
+        prompt = self._construir_prompt_classificacao(text, dados_fatura)
+        logger.info(
+            "Prompt de classificação: %d caracteres (~%d tokens estimados, ~4 chars/token).",
+            len(prompt), len(prompt) // 4,
+        )
 
         resultado = anythingllm_client.consultar_workspace(prompt, settings.ANYTHINGLLM_WORKSPACE_EXEMPLOS)
         dados = self._extrair_json(resultado["resposta"])
@@ -180,6 +162,34 @@ Responda APENAS com JSON válido, sem texto à volta, neste formato exacto:
 
         logger.info("AnythingLLM (exemplos) classificou como: %s", dados.get("tipo"))
         return dados
+
+    # Fase 8 do mapa de impacto — otimização do prompt: só chega aqui quando
+    # o gate da Fase 7 já decidiu que a IA é mesmo necessária (regras não
+    # conseguiram classificar), por isso o excerto de texto continua
+    # generoso (2000 caracteres — cortá-lo mais arriscaria tirar
+    # precisamente o contexto que falta nos casos difíceis, sem medição
+    # real que justifique um valor menor). O que É reduzido, sem qualquer
+    # perda de informação, é o texto fixo (instruções + rótulos), enviado
+    # em TODAS as chamadas de IA — extraído para um método próprio para
+    # poder ser testado isoladamente (tamanho, presença dos campos).
+    def _construir_prompt_classificacao(self, text: str, dados_fatura: Dict[str, Any]) -> str:
+        texto = (text or "")[:2000]
+
+        return f"""Especialista em contabilidade angolana (PGC-AO, Decreto 82/01). Os dados abaixo já foram extraídos por regex — não os reinterprete nem corrija. Tarefa: CLASSIFICAR o tipo de operação contabilística. Não indique contas nem valores.
+
+DADOS EXTRAÍDOS:
+- Emitente: {dados_fatura.get('emitente_nome') or '(não identificado)'} (NIF {dados_fatura.get('emitente_nif') or '?'})
+- Adquirente: {dados_fatura.get('adquirente_nome') or '(não identificado)'} (NIF {dados_fatura.get('adquirente_nif') or '?'})
+- Nº documento: {dados_fatura.get('numero_fatura') or '?'}
+- Valor total: {dados_fatura.get('valor_total_aoa') or '?'} AOA
+- Data: {dados_fatura.get('data_emissao') or '?'}
+- Tipo de documento detetado: {dados_fatura.get('tipo_documento') or 'desconhecido'}
+
+EXCERTO (contexto/desambiguação, não extrair dados novos):
+{texto}
+
+Responda só com JSON válido, sem texto à volta:
+{{"tipo": "compra_mercadoria|compra_servico|venda_mercadoria|prestacao_servico|pagamento_fornecedor|recebimento_cliente|a_classificar", "descricao": "curta", "confianca": 0}}"""
 
     def _obter_fundamentacao(self, tipo: Any, fontes_exemplos: List[str]) -> str:
         """Segunda chamada, ao workspace de normas, só para citar a base
