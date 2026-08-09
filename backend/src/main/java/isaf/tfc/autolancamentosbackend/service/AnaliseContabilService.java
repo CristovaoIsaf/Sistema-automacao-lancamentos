@@ -55,8 +55,15 @@ public class AnaliseContabilService {
         DocumentoContabilistico documento = documentoRepository.findById(documentoId)
                 .orElseThrow(() -> new RuntimeException("Documento não encontrado: " + documentoId));
 
+        // Fase 5 — contexto da empresa disponível ANTES de a entidade ser
+        // resolvida (ao contrário do contexto completo, construído mais
+        // abaixo depois de entidadeService.resolverOuCriar): passado à
+        // classificação para desempatar casos ambíguos (ver
+        // DocumentAnalyzer._classificar_com_regras no FastAPI).
+        ContextoClassificacaoDTO contextoEmpresa = contextoClassificacaoService.construirContexto(null);
+
         AnaliseResponse analise = analisadorDocumentoIA.analisar(
-                documento.getConteudo(), documento.getNomeFicheiro(), documento.getHashConteudo());
+                documento.getConteudo(), documento.getNomeFicheiro(), documento.getHashConteudo(), contextoEmpresa);
 
         if (analise == null) {
             throw new RuntimeException("A API de análise devolveu uma resposta vazia.");

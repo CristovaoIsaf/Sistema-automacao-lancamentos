@@ -1,6 +1,7 @@
 package isaf.tfc.autolancamentosbackend.service;
 
 import isaf.tfc.autolancamentosbackend.dto.AnaliseResponse;
+import isaf.tfc.autolancamentosbackend.dto.ContextoClassificacaoDTO;
 
 /**
  * Abstração do fornecedor de análise de documentos (OCR + classificação + contas).
@@ -17,6 +18,12 @@ public interface AnalisadorDocumentoIA {
      * chave estável ao cache de OCR/validação das próximas fases. Pode ser
      * null (ex. chamadas fora do fluxo de upload normal) — nesse caso o
      * FastAPI calcula-a a partir dos bytes recebidos.
+     *
+     * `contextoEmpresa` (Fase 5 do plano de 20 fases — classificação
+     * contabilística): reaproveita ContextoClassificacaoDTO (Fase 3, ver
+     * ContextoClassificacaoService) só pelos campos de empresa — sempre
+     * disponível, ao contrário do histórico da entidade, que só se
+     * conhece depois desta chamada. Pode ser null.
      */
-    AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro, String fingerprint);
+    AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro, String fingerprint, ContextoClassificacaoDTO contextoEmpresa);
 }

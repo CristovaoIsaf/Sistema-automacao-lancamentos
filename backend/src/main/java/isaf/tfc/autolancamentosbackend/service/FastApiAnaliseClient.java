@@ -1,6 +1,7 @@
 package isaf.tfc.autolancamentosbackend.service;
 
 import isaf.tfc.autolancamentosbackend.dto.AnaliseResponse;
+import isaf.tfc.autolancamentosbackend.dto.ContextoClassificacaoDTO;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -30,7 +31,7 @@ public class FastApiAnaliseClient implements AnalisadorDocumentoIA {
     }
 
     @Override
-    public AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro, String fingerprint) {
+    public AnaliseResponse analisar(byte[] conteudo, String nomeFicheiro, String fingerprint, ContextoClassificacaoDTO contextoEmpresa) {
         ByteArrayResource resource = new ByteArrayResource(conteudo) {
             @Override
             public String getFilename() {
@@ -47,6 +48,17 @@ public class FastApiAnaliseClient implements AnalisadorDocumentoIA {
         // calculado no upload em vez de deixar o FastAPI recalculá-lo.
         if (fingerprint != null && !fingerprint.isBlank()) {
             body.add("fingerprint", fingerprint);
+        }
+        // Fase 5 — ver AnalisadorDocumentoIA.analisar: contexto da empresa
+        // (só os campos usados pelo FastAPI em /analisar), nunca a
+        // ContextoClassificacaoDTO inteira.
+        if (contextoEmpresa != null) {
+            if (contextoEmpresa.getEmpresaAtividadeEconomica() != null && !contextoEmpresa.getEmpresaAtividadeEconomica().isBlank()) {
+                body.add("empresa_atividade_economica", contextoEmpresa.getEmpresaAtividadeEconomica());
+            }
+            if (contextoEmpresa.getEmpresaNaturezaNegocio() != null && !contextoEmpresa.getEmpresaNaturezaNegocio().isBlank()) {
+                body.add("empresa_natureza_negocio", contextoEmpresa.getEmpresaNaturezaNegocio());
+            }
         }
 
         try {

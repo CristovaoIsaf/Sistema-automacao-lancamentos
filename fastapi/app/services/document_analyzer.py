@@ -19,8 +19,30 @@ logger = logging.getLogger(__name__)
 # forma que altere o significado da pergunta (não só cosmética), subir
 # AI_CACHE_VERSION — senão uma resposta antiga, calculada com um prompt
 # diferente, seria confundida com uma actual.
-AI_CACHE_VERSION = "TFC-2026-v1"
+# v2 — Fase 5 do plano de 20 fases (classificação contabilística) passou a
+# incluir o contexto da empresa (atividade/natureza do negócio) no prompt.
+AI_CACHE_VERSION = "TFC-2026-v2"
 _cache_ia: CacheVersionado = CacheVersionado("ia")
+
+# Fase 5 do plano de 20 fases — palavras que, na atividade económica/
+# natureza do negócio da empresa (texto livre, configurado por um
+# Administrador em /configuracoes), sugerem que a empresa presta serviços
+# em vez de revender mercadorias. Usado só como desempate determinístico
+# (nunca por IA) quando uma compra é genérica (não diz "mercadoria" nem
+# tem palavras de serviço no PRÓPRIO documento) — ver
+# _classificar_com_regras. Não classificar só pelo nome do produto: a
+# mesma palavra "fatura" significa coisas diferentes consoante o negócio.
+PALAVRAS_CHAVE_EMPRESA_SERVICOS = ["serviço", "servico", "prestação", "prestacao", "consultoria", "assessoria"]
+
+
+def _empresa_e_prestadora_de_servicos(contexto_empresa: Optional[Dict[str, Any]]) -> bool:
+    if not contexto_empresa:
+        return False
+    texto = " ".join(filter(None, [
+        contexto_empresa.get("atividade_economica"),
+        contexto_empresa.get("natureza_negocio"),
+    ])).lower()
+    return any(p in texto for p in PALAVRAS_CHAVE_EMPRESA_SERVICOS)
 
 # Regra de ouro deste ficheiro:
 #   A IA (ou as regras) só CLASSIFICA o tipo de documento. Toda a extração
@@ -59,8 +81,18 @@ class DocumentAnalyzer:
 
     # ── Ponto de entrada ─────────────────────────────────────────────────────
     def analyze_document(
-        self, text: str, ocr_data: Dict[str, Any], fingerprint: Optional[str] = None
+        self,
+        text: str,
+        ocr_data: Dict[str, Any],
+        fingerprint: Optional[str] = None,
+        contexto_empresa: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        """`contexto_empresa` (Fase 5 do plano de 20 fases — classificação
+        contabilística): {"atividade_economica": ..., "natureza_negocio":
+        ...}, enviado pelo backend Java em TODA análise (sempre disponível,
+        ao contrário do histórico da entidade — ver ContextoClassificacaoService
+        no lado Java). Usado como desempate nas regras e como contexto
+        adicional no prompt de IA — nunca decide sozinho, nunca inventado."""
         dados_fatura = ocr_data.get("dados_fatura", {}) or {}
 
         # Fase 7 do mapa de impacto — gate antes da IA: a classificação por
@@ -70,7 +102,7 @@ class DocumentAnalyzer:
         # pena gastar uma chamada de IA a tentar desambiguar. Quando as
         # regras já reconheceram um padrão claro, esse resultado é usado tal
         # como está — a IA não traria mais informação nesse caso.
-        classificacao_regras = self._classificar_com_regras(text, dados_fatura)
+        classificacao_regras = self._classificar_com_regras(text, dados_fatura, contexto_empresa)
 
         if not self._precisa_de_ia(classificacao_regras):
             logger.info(
@@ -101,7 +133,7 @@ class DocumentAnalyzer:
         try:
             if self.use_ai:
                 classificacao, ia_cache_hit = self._classificar_com_anythingllm_cacheado(
-                    text, dados_fatura, fingerprint
+                    text, dados_fatura, fingerprint, contexto_empresa
                 )
             else:
                 classificacao = classificacao_regras
@@ -267,8 +299,10 @@ class DocumentAnalyzer:
     #      não o texto em bruto como fonte primária.
     #   2) NORMAS só é consultado depois, para fundamentar legalmente o tipo
     #      já decidido — falha aqui não deita fora uma classificação válida.
-    def _classificar_com_anythingllm(self, text: str, dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
-        prompt = self._construir_prompt_classificacao(text, dados_fatura)
+    def _classificar_com_anythingllm(
+        self, text: str, dados_fatura: Dict[str, Any], contexto_empresa: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        prompt = self._construir_prompt_classificacao(text, dados_fatura, contexto_empresa)
         logger.info(
             "Prompt de classificação: %d caracteres (~%d tokens estimados, ~4 chars/token).",
             len(prompt), len(prompt) // 4,
@@ -284,7 +318,11 @@ class DocumentAnalyzer:
         return dados
 
     def _classificar_com_anythingllm_cacheado(
-        self, text: str, dados_fatura: Dict[str, Any], fingerprint: Optional[str]
+        self,
+        text: str,
+        dados_fatura: Dict[str, Any],
+        fingerprint: Optional[str],
+        contexto_empresa: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, Any], bool]:
         """Fase 9: variante de _classificar_com_anythingllm que evita
         repetir as DUAS chamadas de IA (classificação + fundamentação
@@ -292,11 +330,11 @@ class DocumentAnalyzer:
         fingerprint, chama sempre a IA de novo — não há chave de cache
         válida. Devolve (resultado, veio_do_cache)."""
         if not fingerprint:
-            return self._classificar_com_anythingllm(text, dados_fatura), False
+            return self._classificar_com_anythingllm(text, dados_fatura, contexto_empresa), False
 
         versao = f"{AI_CACHE_VERSION}:{settings.ANYTHINGLLM_WORKSPACE_EXEMPLOS}:{settings.ANYTHINGLLM_WORKSPACE_NORMAS}"
         resultado, veio_do_cache = _cache_ia.obter_ou_calcular(
-            fingerprint, versao, lambda: self._classificar_com_anythingllm(text, dados_fatura)
+            fingerprint, versao, lambda: self._classificar_com_anythingllm(text, dados_fatura, contexto_empresa)
         )
         if veio_do_cache:
             logger.info("Classificação de IA reaproveitada do cache (fingerprint=%s).", fingerprint)
@@ -311,8 +349,22 @@ class DocumentAnalyzer:
     # perda de informação, é o texto fixo (instruções + rótulos), enviado
     # em TODAS as chamadas de IA — extraído para um método próprio para
     # poder ser testado isoladamente (tamanho, presença dos campos).
-    def _construir_prompt_classificacao(self, text: str, dados_fatura: Dict[str, Any]) -> str:
+    def _construir_prompt_classificacao(
+        self, text: str, dados_fatura: Dict[str, Any], contexto_empresa: Optional[Dict[str, Any]] = None
+    ) -> str:
         texto = (text or "")[:2000]
+
+        # Fase 5 do plano de 20 fases — contexto da empresa (configurado
+        # por um Administrador, nunca inventado), só incluído quando
+        # existe. Ajuda a IA a não classificar só pelo "nome do produto"
+        # (ex: "viatura" não é sempre mercadoria — depende do negócio).
+        linha_empresa = ""
+        if contexto_empresa and (contexto_empresa.get("atividade_economica") or contexto_empresa.get("natureza_negocio")):
+            linha_empresa = (
+                f"\nCONTEXTO DA EMPRESA (usar só para desambiguar, não é um dado do documento):\n"
+                f"- Atividade económica: {contexto_empresa.get('atividade_economica') or '?'}\n"
+                f"- Natureza do negócio: {contexto_empresa.get('natureza_negocio') or '?'}\n"
+            )
 
         return f"""Especialista em contabilidade angolana (PGC-AO, Decreto 82/01). Os dados abaixo já foram extraídos por regex — não os reinterprete nem corrija. Tarefa: CLASSIFICAR o tipo de operação contabilística. Não indique contas nem valores.
 
@@ -323,7 +375,7 @@ DADOS EXTRAÍDOS:
 - Valor total: {dados_fatura.get('valor_total_aoa') or '?'} AOA
 - Data: {dados_fatura.get('data_emissao') or '?'}
 - Tipo de documento detetado: {dados_fatura.get('tipo_documento') or 'desconhecido'}
-
+{linha_empresa}
 EXCERTO (contexto/desambiguação, não extrair dados novos):
 {texto}
 
@@ -373,7 +425,9 @@ Responda só com JSON válido, sem texto à volta:
     # Só classifica o tipo por palavras-chave — valor/entidade/NIF/data/IVA
     # já vêm tratados em dados_fatura e são aplicados em _montar_resposta,
     # exactamente como no caminho com IA.
-    def _classificar_com_regras(self, text: str, dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
+    def _classificar_com_regras(
+        self, text: str, dados_fatura: Dict[str, Any], contexto_empresa: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         t = (text or "").lower()
 
         recebimento = any(k in t for k in ["recibo de pagamento", "recebido", "recebemos", "entrada de caixa"])
@@ -382,6 +436,7 @@ Responda só com JSON válido, sem texto à volta:
         servico = any(k in t for k in ["serviço", "servico", "prestação", "prestacao", "renda", "aluguer",
                                        "água", "agua", "energia", "electricidade", "eletricidade", "transporte",
                                        "seguro", "telefone", "internet"])
+        mercadoria_especifica = "mercadoria" in t
         compra = any(k in t for k in ["fatura", "factura", "compra", "fornecedor", "mercadoria"])
 
         if recebimento:
@@ -395,7 +450,17 @@ Responda só com JSON válido, sem texto à volta:
         elif servico:
             tipo = pgc_ao.TIPO_COMPRA_SERVICO
         elif compra:
-            tipo = pgc_ao.TIPO_COMPRA_MERCADORIA
+            # Fase 5 do plano de 20 fases — "não classificar apenas pelo
+            # nome do produto": uma "fatura"/"compra" genérica, sem a
+            # palavra "mercadoria" nem palavras de serviço no PRÓPRIO
+            # documento, não é automaticamente mercadoria para revenda —
+            # se a empresa é conhecida por prestar serviços (contexto
+            # configurado, nunca inferido pela IA), é mais provável ser
+            # uma despesa operacional.
+            if not mercadoria_especifica and _empresa_e_prestadora_de_servicos(contexto_empresa):
+                tipo = pgc_ao.TIPO_COMPRA_SERVICO
+            else:
+                tipo = pgc_ao.TIPO_COMPRA_MERCADORIA
         else:
             tipo = pgc_ao.TIPO_A_CLASSIFICAR
 

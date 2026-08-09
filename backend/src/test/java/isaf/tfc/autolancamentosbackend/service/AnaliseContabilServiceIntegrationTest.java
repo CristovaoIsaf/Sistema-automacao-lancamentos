@@ -39,7 +39,7 @@ class AnaliseContabilServiceIntegrationTest {
 
     @Test
     void analisar_enviaBytesReaisEDevolveLinhasEquilibradas() throws Exception {
-        AnaliseResponse resposta = analisadorDocumentoIA.analisar(gerarImagemDeFaturaTeste(), "fatura_teste.png", null);
+        AnaliseResponse resposta = analisadorDocumentoIA.analisar(gerarImagemDeFaturaTeste(), "fatura_teste.png", null, null);
 
         assertThat(resposta).isNotNull();
         assertThat(resposta.isSuccess()).isTrue();

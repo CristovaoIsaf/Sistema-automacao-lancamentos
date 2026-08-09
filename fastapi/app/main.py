@@ -77,6 +77,8 @@ async def analisar(
     ficheiro: UploadFile = File(...),
     preprocess: bool = True,
     fingerprint: Optional[str] = Form(None),
+    empresa_atividade_economica: Optional[str] = Form(None),
+    empresa_natureza_negocio: Optional[str] = Form(None),
 ):
     """
     PIPELINE REAL (substitui os dados fixos anteriores):
@@ -92,6 +94,12 @@ async def analisar(
     recalcular à toa nem arriscar duas implementações divergirem — é
     opcional só para permitir chamar este endpoint directamente (fora do
     fluxo Java), caso em que é calculado aqui como fallback.
+
+    `empresa_atividade_economica`/`empresa_natureza_negocio` (Fase 5 do
+    plano de 20 fases — classificação contabilística): contexto da
+    empresa (ver ContextoClassificacaoService no lado Java), sempre
+    disponível e enviado em toda análise — nunca inferido pela IA, só
+    configurado por um Administrador em /configuracoes.
     """
     inicio_total = time.monotonic()
 
@@ -100,6 +108,13 @@ async def analisar(
         raise HTTPException(status_code=400, detail="Ficheiro vazio.")
 
     fingerprint_final = fingerprint or calcular_fingerprint(conteudo)
+
+    contexto_empresa = None
+    if empresa_atividade_economica or empresa_natureza_negocio:
+        contexto_empresa = {
+            "atividade_economica": empresa_atividade_economica,
+            "natureza_negocio": empresa_natureza_negocio,
+        }
 
     # Tesseract é bloqueante — corre numa threadpool. Fase 5: usa a
     # variante com cache, que evita repetir o OCR se este fingerprint já
@@ -138,6 +153,7 @@ async def analisar(
         texto,
         {"dados_fatura": extraido["dados"], "confidence": ocr_res.get("confidence", 0)},
         fingerprint_final,
+        contexto_empresa,
     )
     metricas.registar_duracao("classificacao", time.monotonic() - inicio_classificacao)
 
