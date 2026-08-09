@@ -95,6 +95,7 @@ public class AnaliseContabilService {
         sugestao.setTextoOriginal(analise.getTextoOcr());
         sugestao.setLinhasJson(serializarLinhas(analise.getLinhas()));
         sugestao.setFundamentacao(analise.getFundamentacao());
+        sugestao.setConfianca(analise.getConfianca());
         sugestao.setCategoria(analise.getCategoria());
         sugestao.setValidacaoJson(serializarValidacao(analise.getValidacao()));
         sugestao.setContextoJson(serializarContexto(contexto));

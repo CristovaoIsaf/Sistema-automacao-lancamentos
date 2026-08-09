@@ -63,6 +63,13 @@ public class Sugestao {
     @Column(name = "fundamentacao", columnDefinition = "TEXT")
     private String fundamentacao;
 
+    // Confiança (0-100) da classificação — já vinha em AnaliseResponse.confianca
+    // desde sempre, mas nunca tinha sido persistida aqui; ficava
+    // silenciosamente perdida antes de chegar ao frontend (Fase 8 do plano
+    // de 20 fases: "mostrar imediatamente ... confiança" exige guardá-la).
+    // Aditiva: sugestões antigas ficam com null.
+    private Integer confianca;
+
     // Resultado do motor de validação determinística (Fase 3 — ver
     // fastapi/app/services/document_validation.py), serializado em JSON,
     // tal como linhasJson. Aditiva: sugestões antigas ficam com null, o

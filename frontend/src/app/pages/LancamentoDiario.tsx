@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router';
-import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid, History, Sparkles } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid, History, Sparkles, FileText, Gauge } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
 import { criarLancamento, listarLancamentos } from '../api/lancamentoApi';
 import { aprovarSugestao, rejeitarSugestao } from '../api/sugestaoApi';
 import { listarContas } from '../api/contaApi';
 import { listarCategoriasConta } from '../api/categoriaContaApi';
+import { abrirDocumento } from '../api/documentoApi';
 import type { CategoriaConta, ContaResumo } from '../types/categoriaConta';
 import type { LancamentoResponse } from '../types/lancamento';
 import type { OpcaoContextualizacao, Sugestao } from '../types/documento';
 import { ValidacaoDocumento } from '../components/ValidacaoDocumento';
 import { ContextualizacaoAssistida } from '../components/ContextualizacaoAssistida';
+import { ContextoIdentificado } from '../components/ContextoIdentificado';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -315,17 +317,57 @@ export function LancamentoDiario() {
         <p className="text-[13px] text-[#475569] mt-0.5">Registo manual · Método das partidas dobradas</p>
       </div>
 
+      {/* Fase 8 do plano de 20 fases — "visão operacional" pós-processamento
+          do documento: reúne documento/entidade/contexto/classificação/
+          confiança/justificativa/estado numa única zona, antes da visão
+          contabilística tradicional (linhas de débito/crédito) abaixo. */}
       {sugestaoAtual && sugestaoAtual.estado === 'PENDENTE' && (
-        <div className="flex items-center gap-2 bg-[#F5F3FF] border border-[#DDD6FE] rounded-lg px-4 py-2.5">
-          <Sparkles style={{ width: 14, height: 14 }} className="text-[#7C3AED] flex-shrink-0" />
+        <div className="bg-[#F5F3FF] border border-[#DDD6FE] rounded-lg px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Sparkles style={{ width: 14, height: 14 }} className="text-[#7C3AED] flex-shrink-0" />
+              <span className="text-[13px] font-medium text-[#5B21B6]">Sugestão da IA — revisão pendente</span>
+              {typeof sugestaoAtual.confianca === 'number' && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                    sugestaoAtual.confianca >= 90
+                      ? 'bg-[#ECFDF5] text-[#059669]'
+                      : sugestaoAtual.confianca >= 70
+                      ? 'bg-[#FFFBEB] text-[#D97706]'
+                      : 'bg-[#FEF2F2] text-[#DC2626]'
+                  }`}
+                  title="Confiança da classificação automática"
+                >
+                  <Gauge style={{ width: 11, height: 11 }} /> {sugestaoAtual.confianca}% confiança
+                </span>
+              )}
+            </div>
+            {sugestaoAtual.documentoId != null && (
+              <button
+                type="button"
+                onClick={() => abrirDocumento(sugestaoAtual.documentoId!).catch(() => toast.error('Não foi possível abrir o documento'))}
+                className="flex items-center gap-1 h-7 px-2.5 bg-white border border-[#DDD6FE] hover:bg-[#F5F3FF] text-[#5B21B6] text-[12px] font-medium rounded-md transition-colors flex-shrink-0"
+              >
+                <FileText style={{ width: 12, height: 12 }} /> Ver Documento
+              </button>
+            )}
+          </div>
+
           <p className="text-[13px] text-[#5B21B6]">
-            <span className="font-medium">Sugestão da IA — revisão pendente.</span>{' '}
             Tipo detectado: <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{sugestaoAtual.tipoDocumento}</span>.
             {sugestaoAtual.entidade && (
               <> Entidade: <span className="font-medium">{sugestaoAtual.entidade}</span>{sugestaoAtual.nif ? ` (NIF ${sugestaoAtual.nif})` : ''}.</>
             )}{' '}
             Os dados abaixo foram pré-carregados; confirma ou ajusta antes de aprovar.
           </p>
+
+          <ContextoIdentificado contextoJson={sugestaoAtual.contextoJson} />
+
+          {sugestaoAtual.fundamentacao && (
+            <p className="text-[12px] text-[#6D28D9] italic border-t border-[#DDD6FE] pt-2">
+              Justificação: {sugestaoAtual.fundamentacao}
+            </p>
+          )}
         </div>
       )}
 

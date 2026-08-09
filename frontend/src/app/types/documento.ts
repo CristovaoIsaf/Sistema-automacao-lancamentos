@@ -34,6 +34,15 @@ export interface Sugestao {
   // lançamento (ver LancamentoDiario.tsx).
   linhasJson?: string | null;
   fundamentacao?: string | null;
+  // Confiança (0-100) da classificação — Fase 8 do plano de 20 fases:
+  // já era calculada pelo FastAPI mas nunca tinha sido persistida nem
+  // exposta ao frontend. null para sugestões antigas.
+  confianca?: number | null;
+  // Contexto usado nesta classificação (Fase 3 — Context Engine),
+  // serializado em JSON. Usar parseContexto
+  // (components/ContextoIdentificado.tsx) antes de mostrar — null para
+  // sugestões antigas, gravadas antes dessa fase.
+  contextoJson?: string | null;
   // Resultado do motor de validação determinística (Fase 3 — ver
   // fastapi/app/services/document_validation.py), serializado em JSON.
   // Usar parseValidacao (components/ValidacaoDocumento.tsx) antes de
@@ -81,4 +90,19 @@ export interface OpcaoContextualizacao {
 export interface PerguntaContextualizacao {
   pergunta: string;
   opcoes: OpcaoContextualizacao[];
+}
+
+// Espelha ContextoClassificacaoDTO (backend, Fase 3 — Context Engine).
+export interface ContextoClassificacao {
+  versao: string;
+  empresaAtividadeEconomica?: string | null;
+  empresaNaturezaNegocio?: string | null;
+  empresaMoeda?: string | null;
+  exercicioAtualInicio?: string | null;
+  exercicioAtualFim?: string | null;
+  entidadeId?: number | null;
+  entidadeNome?: string | null;
+  entidadeNif?: string | null;
+  entidadeTipo?: string | null;
+  historicoTiposOperacaoRecentes: string[];
 }
