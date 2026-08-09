@@ -1,6 +1,7 @@
 package isaf.tfc.autolancamentosbackend.service;
 
 import isaf.tfc.autolancamentosbackend.dto.BalanceteResponseDTO;
+import isaf.tfc.autolancamentosbackend.dto.ContaDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 import isaf.tfc.autolancamentosbackend.model.Lancamento;
 import isaf.tfc.autolancamentosbackend.model.LinhaLancamento;
@@ -30,7 +31,13 @@ class BalanceteServiceTest {
     @BeforeEach
     void setUp() {
         lancamentoRepository = Mockito.mock(LancamentoRepository.class);
-        service = new BalanceteService(lancamentoRepository);
+        PlanoContasClient planoContasClient = Mockito.mock(PlanoContasClient.class);
+        when(planoContasClient.listar()).thenReturn(List.of(
+                new ContaDTO("31", "Clientes"),
+                new ContaDTO("61", "Vendas"),
+                new ContaDTO("34.5.2", "IVA liquidado")
+        ));
+        service = new BalanceteService(lancamentoRepository, planoContasClient);
     }
 
     @Test

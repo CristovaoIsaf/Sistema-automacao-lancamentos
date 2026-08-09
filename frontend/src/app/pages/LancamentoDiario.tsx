@@ -139,7 +139,7 @@ export function LancamentoDiario() {
 
   useEffect(() => {
     listarContas()
-      .then(dados => setContas(dados as unknown as ContaSimples[]))
+      .then(setContas)
       .catch(err => {
         console.error('Erro ao carregar plano de contas:', err);
         toast.error('Não foi possível carregar o plano de contas');

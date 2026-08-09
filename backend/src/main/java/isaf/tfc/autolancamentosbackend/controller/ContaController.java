@@ -1,6 +1,7 @@
 package isaf.tfc.autolancamentosbackend.controller;
 
 import isaf.tfc.autolancamentosbackend.dto.ContaDTO;
+import isaf.tfc.autolancamentosbackend.service.PlanoContasClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -9,65 +10,27 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Plano de Contas — espelha literalmente os códigos usados por
- * fastapi/app/services/pgc.py (Decreto n.º 82/01), a fonte oficial de
- * contas realmente usada pelos lançamentos automáticos.
+ * Plano de Contas — devolve o plano de contas real (Decreto n.º 82/01),
+ * a mesma fonte usada pelos lançamentos automáticos.
  *
- * Propositadamente NÃO usa a tabela "contas_contabilisticas" da BD nem o
- * mock planoContasAngolano do frontend — esses seguem uma numeração
- * genérica (1=Ativo, 2=Passivo, ...) diferente da classificação real do
- * Decreto 82/01 (1=Disponibilidades, 2=Existências, 3=Terceiros, ...) que o
- * pgc.py implementa. Mostrar essa outra lista aqui criaria uma página de
- * "Plano de Contas" com contas diferentes das que os lançamentos realmente
- * usam.
+ * Fase 6 do plano de 20 fases: antes desta fase mantinha aqui uma cópia
+ * manual, hardcoded, das contas já definidas em
+ * fastapi/app/services/pgc.py — duas listas sincronizadas à mão. Agora só
+ * delega em PlanoContasClient, que busca o plano de contas real a
+ * GET /pgc/contas (FastAPI); nenhuma conta é definida neste ficheiro.
  */
 @RestController
 @RequestMapping("/api/contas")
 public class ContaController {
 
-    // Público para ser reutilizado por BalanceteService — mesma fonte de
-    // nomes de conta, para o Balancete nunca mostrar um nome diferente do
-    // que a página "Plano de Contas" mostra para o mesmo código.
-    public static final List<ContaDTO> CONTAS = List.of(
-            new ContaDTO("21", "Compras"),
-            new ContaDTO("26", "Mercadorias"),
-            new ContaDTO("31", "Clientes"),
-            new ContaDTO("32", "Fornecedores"),
-            new ContaDTO("43", "Depósitos à ordem"),
-            new ContaDTO("45", "Caixa"),
-            new ContaDTO("61", "Vendas"),
-            new ContaDTO("62", "Prestações de serviços"),
-            new ContaDTO("75", "Outros custos e perdas operacionais"),
-            new ContaDTO("75.2.11", "Água"),
-            new ContaDTO("75.2.12", "Electricidade"),
-            new ContaDTO("75.2.14", "Conservação e reparação"),
-            new ContaDTO("75.2.20", "Comunicação"),
-            new ContaDTO("75.2.21", "Rendas e alugueres"),
-            new ContaDTO("75.2.22", "Seguros"),
-            new ContaDTO("75.2.23", "Deslocações e estadas"),
-            // Extensão do projeto (autorizada pelo autor do TFC): o Decreto 82/01 é
-            // anterior ao IVA em Angola (2019) e não define conta oficial para este imposto.
-            new ContaDTO("34.5.1", "IVA dedutível"),
-            new ContaDTO("34.5.2", "IVA liquidado")
-    );
+    private final PlanoContasClient planoContasClient;
+
+    public ContaController(PlanoContasClient planoContasClient) {
+        this.planoContasClient = planoContasClient;
+    }
 
     @GetMapping
     public ResponseEntity<List<ContaDTO>> listar() {
-        return ResponseEntity.ok(CONTAS);
-    }
-
-    /**
-     * Devolve a ContaDTO real para um código do plano de contas — usado por
-     * CategoriaContaController para nunca duplicar nome/código de conta.
-     * Lança se o código não existir (falha alto e cedo: uma categoria a
-     * referenciar um código inexistente é um erro de configuração, não um
-     * caso a tratar em runtime).
-     */
-    public static ContaDTO porCodigo(String codigo) {
-        return CONTAS.stream()
-                .filter(c -> c.getCodigo().equals(codigo))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "Código de conta '" + codigo + "' referenciado numa categoria não existe em ContaController.CONTAS"));
+        return ResponseEntity.ok(planoContasClient.listar());
     }
 }

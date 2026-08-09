@@ -1,6 +1,7 @@
 package isaf.tfc.autolancamentosbackend.controller;
 
 import isaf.tfc.autolancamentosbackend.dto.CategoriaContaDTO;
+import isaf.tfc.autolancamentosbackend.service.PlanoContasClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,17 +13,17 @@ import java.util.Map;
 
 /**
  * Camada de categorização por cima do plano de contas real
- * (ContaController.CONTAS) — agrupa as contas por tipo de operação
- * (Vendas, Compras, ...) para o lançamento manual não obrigar a percorrer
- * as 18 contas todas de cada vez. Não define nenhuma conta nova, só
- * referencia códigos já existentes; uma conta pode pertencer a várias
- * categorias (ex. "45 Caixa" é principal em "Caixa" e ocasional em
+ * (PlanoContasClient, ver Fase 6 do plano de 20 fases) — agrupa as contas
+ * por tipo de operação (Vendas, Compras, ...) para o lançamento manual não
+ * obrigar a percorrer as 18 contas todas de cada vez. Não define nenhuma
+ * conta nova, só referencia códigos já existentes; uma conta pode pertencer
+ * a várias categorias (ex. "45 Caixa" é principal em "Caixa" e ocasional em
  * "Vendas"/"Compras").
  *
  * Só existem aqui categorias com pelo menos uma conta real por trás — não
  * há "Salários"/"Activos Fixos"/etc. enquanto essas contas não existirem no
- * plano (ver ContaController), para não mostrar categorias vazias.
- * Acrescentar uma categoria nova é só uma entrada nova em CATEGORIAS.
+ * plano, para não mostrar categorias vazias. Acrescentar uma categoria nova
+ * é só uma entrada nova em CATEGORIAS.
  */
 @RestController
 @RequestMapping("/api/categorias-conta")
@@ -30,6 +31,12 @@ public class CategoriaContaController {
 
     private static final Map<String, String[]> PRINCIPAIS_POR_CATEGORIA = new LinkedHashMap<>();
     private static final Map<String, String[]> OCASIONAIS_POR_CATEGORIA = new LinkedHashMap<>();
+
+    private final PlanoContasClient planoContasClient;
+
+    public CategoriaContaController(PlanoContasClient planoContasClient) {
+        this.planoContasClient = planoContasClient;
+    }
 
     static {
         PRINCIPAIS_POR_CATEGORIA.put("Vendas", new String[]{"31", "61", "62", "34.5.2"});
@@ -68,6 +75,6 @@ public class CategoriaContaController {
     }
 
     private List<isaf.tfc.autolancamentosbackend.dto.ContaDTO> contas(String[] codigos) {
-        return List.of(codigos).stream().map(ContaController::porCodigo).toList();
+        return List.of(codigos).stream().map(planoContasClient::porCodigo).toList();
     }
 }

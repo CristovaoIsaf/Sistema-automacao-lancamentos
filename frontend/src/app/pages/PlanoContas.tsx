@@ -20,7 +20,7 @@ export function PlanoContas() {
   useEffect(() => {
     Promise.all([listarContas(), listarCategoriasConta()])
       .then(([dadosContas, dadosCategorias]) => {
-        setContas(dadosContas as unknown as ContaResumo[]);
+        setContas(dadosContas);
         setCategorias(dadosCategorias);
       })
       .catch(err => console.error('Erro ao carregar plano de contas:', err))

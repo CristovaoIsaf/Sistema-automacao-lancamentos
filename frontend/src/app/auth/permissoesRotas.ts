@@ -15,9 +15,6 @@ export const PERFIS_POR_ROTA: Record<string, Perfil[]> = {
   '/': TODOS,
   '/upload-documentos': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/documentos': TODOS,
-  // Página órfã (sem link no menu), mesma regra de escrita que as outras
-  // páginas de revisão de sugestões da IA.
-  '/classificacao': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/lancamentos': TODOS,
   '/lancamento-diario': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/balancetes': TODOS,

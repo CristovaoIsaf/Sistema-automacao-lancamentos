@@ -11,7 +11,6 @@ import { IACategorizacao } from "./pages/IACategorizacao";
 import { Configuracoes } from "./pages/Configuracoes";
 import { UploadDocumentos } from "./pages/UploadDocumentos";
 import { Arquivo } from "./pages/Arquivo";
-import { ClassificacaoContabilistica } from "./pages/ClassificacaoContabilistica";
 import { Balancetes } from "./pages/Balancetes";
 import { ExportacaoSAFT } from "./pages/ExportacaoSAFT";
 import { Utilizadores } from "./pages/Utilizadores";
@@ -39,7 +38,6 @@ export const router = createBrowserRouter([
       { index: true, element: <RotaProtegida><Dashboard /></RotaProtegida> },
       { path: "upload-documentos", element: <RotaProtegida><UploadDocumentos /></RotaProtegida> },
       { path: "documentos", element: <RotaProtegida><Arquivo /></RotaProtegida> },
-      { path: "classificacao", element: <RotaProtegida><ClassificacaoContabilistica /></RotaProtegida> },
       { path: "lancamentos", element: <RotaProtegida><Lancamentos /></RotaProtegida> },
       { path: "lancamento-diario", element: <RotaProtegida><LancamentoDiario /></RotaProtegida> },
       { path: "balancetes", element: <RotaProtegida><Balancetes /></RotaProtegida> },

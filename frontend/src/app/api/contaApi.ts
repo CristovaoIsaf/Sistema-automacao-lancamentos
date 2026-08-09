@@ -1,22 +1,12 @@
-import { apiGet, apiPost, apiPut } from './client';
-import type { Conta } from '../types/contabilidade';
+import { apiGet } from './client';
+import type { ContaResumo } from '../types/categoriaConta';
 
-export async function listarContas(): Promise<Conta[]> {
-  return apiGet<Conta[]>('/api/contas');
-}
-
-export async function obterConta(id: string): Promise<Conta> {
-  return apiGet<Conta>(`/api/contas/${id}`);
-}
-
-export async function criarConta(dados: Omit<Conta, 'id'>): Promise<Conta> {
-  return apiPost<Conta>('/api/contas', dados);
-}
-
-export async function atualizarConta(id: string, dados: Partial<Conta>): Promise<Conta> {
-  return apiPut<Conta>(`/api/contas/${id}`, dados);
-}
-
-export async function toggleContaAtiva(id: string, ativa: boolean): Promise<void> {
-  await apiPut(`/api/contas/${id}/ativa`, { ativa });
+// Fase 6 do plano de 20 fases: só GET existe no backend (ContaController) —
+// o plano de contas é definido em fastapi/app/services/pgc.py (fonte
+// única), não é editável por aqui. Antes havia obterConta/criarConta/
+// atualizarConta/toggleContaAtiva a apontar para endpoints que nunca
+// existiram no ContaController real (herdados do modelo Conta genérico
+// de mockData.ts, já removido) — nenhum tinha utilização real.
+export async function listarContas(): Promise<ContaResumo[]> {
+  return apiGet<ContaResumo[]>('/api/contas');
 }

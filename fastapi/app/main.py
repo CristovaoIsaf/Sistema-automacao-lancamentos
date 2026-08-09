@@ -10,6 +10,7 @@ from services.document_fingerprint import calcular_fingerprint
 from services.metricas import metricas
 from services.ocr_service import OCRService
 from services.document_analyzer import DocumentAnalyzer
+from services import pgc as pgc_ao
 
 app = FastAPI(
     title="AI Service",
@@ -49,6 +50,15 @@ def obter_metricas():
     deste processo (ver services/metricas.py). Só para inspeção/depuração
     (thesis), não é um endpoint de produção com autenticação."""
     return metricas.resumo()
+
+
+@app.get("/pgc/contas")
+@app.get("/api/v1/pgc/contas")
+def pgc_contas():
+    """Fase 6 do plano de 20 fases — plano de contas oficial (Decreto
+    82/01, ver services/pgc.py), fonte única consumida pelo backend Java
+    (PlanoContasClient) em vez de uma cópia hardcoded lá."""
+    return pgc_ao.plano_de_contas()
 
 
 @app.post("/ocr")

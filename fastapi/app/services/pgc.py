@@ -295,3 +295,65 @@ def lancamento_equilibrado(linhas: List[Dict[str, str]]) -> bool:
     td = sum(_dec(l.get("debito")) for l in linhas)
     tc = sum(_dec(l.get("credito")) for l in linhas)
     return td == tc
+
+
+# ── Enumeração completa do plano de contas (Fase 6 do plano de 20 fases) ──
+# Antes disto, o backend Java mantinha ContaController.CONTAS como uma cópia
+# manual destas mesmas contas — duas listas hardcoded que tinham de ser
+# sincronizadas à mão a cada alteração. plano_de_contas() é agora a ÚNICA
+# enumeração de todas as contas oficiais deste TFC: referencia as MESMAS
+# tuplas já definidas acima (nunca redefine código/nome), só acrescenta
+# classe/subconta/natureza. O Java (ver PlanoContasClient) consome-a via
+# GET /pgc/contas em vez de manter uma cópia.
+_TODAS_AS_CONTAS: List[tuple] = [
+    C_COMPRAS, C_MERCADORIAS, C_CLIENTES, C_FORNECEDORES, C_BANCO, C_CAIXA,
+    C_VENDAS, C_PRESTACAO_SERVICOS, C_FSE, C_FSE_AGUA, C_FSE_ELECTRICIDADE,
+    C_FSE_CONSERVACAO, C_FSE_RENDAS, C_FSE_SEGUROS, C_FSE_DESLOCACOES,
+    C_FSE_COMUNICACAO, CONTA_IVA_DEDUTIVEL, CONTA_IVA_LIQUIDADO,
+]
+
+# Natureza contabilística de cada conta (DEVEDORA/CREDORA) — não é derivável
+# só do código/classe (a classe 3 "Terceiros" tem Clientes=devedora e
+# Fornecedores=credora), por isso é indicada explicitamente por conta.
+_CONTAS_NATUREZA: Dict[str, str] = {
+    C_COMPRAS[0]: "DEVEDORA",
+    C_MERCADORIAS[0]: "DEVEDORA",
+    C_CLIENTES[0]: "DEVEDORA",
+    C_FORNECEDORES[0]: "CREDORA",
+    C_BANCO[0]: "DEVEDORA",
+    C_CAIXA[0]: "DEVEDORA",
+    C_VENDAS[0]: "CREDORA",
+    C_PRESTACAO_SERVICOS[0]: "CREDORA",
+    C_FSE[0]: "DEVEDORA",
+    C_FSE_AGUA[0]: "DEVEDORA",
+    C_FSE_ELECTRICIDADE[0]: "DEVEDORA",
+    C_FSE_CONSERVACAO[0]: "DEVEDORA",
+    C_FSE_RENDAS[0]: "DEVEDORA",
+    C_FSE_SEGUROS[0]: "DEVEDORA",
+    C_FSE_DESLOCACOES[0]: "DEVEDORA",
+    C_FSE_COMUNICACAO[0]: "DEVEDORA",
+    CONTA_IVA_DEDUTIVEL[0]: "DEVEDORA",
+    CONTA_IVA_LIQUIDADO[0]: "CREDORA",
+}
+
+
+def _classe_da_conta(codigo: str) -> str:
+    """Primeiro dígito do código — a classe do Decreto 82/01 (2=Existências,
+    3=Terceiros, 4=Meios monetários, 6=Proveitos, 7=Custos)."""
+    return codigo[0] if codigo and codigo[0].isdigit() else ""
+
+
+def plano_de_contas() -> List[Dict[str, Optional[str]]]:
+    """Enumera as contas oficiais deste TFC com classe/subconta/natureza —
+    fonte única consumida por GET /pgc/contas (ver main.py) e, do lado
+    Java, por PlanoContasClient."""
+    return [
+        {
+            "codigo": codigo,
+            "nome": nome,
+            "classe": _classe_da_conta(codigo),
+            "subconta": codigo if "." in codigo else None,
+            "natureza": _CONTAS_NATUREZA.get(codigo),
+        }
+        for codigo, nome in _TODAS_AS_CONTAS
+    ]

@@ -23,17 +23,6 @@ export interface LogAuditoria {
   dataHora: string;
 }
 
-export interface Conta {
-  id: string;
-  codigo: string;
-  nome: string;
-  tipo: 'ATIVO' | 'PASSIVO' | 'RECEITA' | 'DESPESA' | 'PATRIMONIO_LIQUIDO';
-  natureza: 'DEVEDORA' | 'CREDORA';
-  nivel: number;
-  contaPai?: string;
-  ativa: boolean;
-}
-
 export interface Lancamento {
   id: string;
   data: string;

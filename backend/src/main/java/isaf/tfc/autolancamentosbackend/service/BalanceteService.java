@@ -1,6 +1,5 @@
 package isaf.tfc.autolancamentosbackend.service;
 
-import isaf.tfc.autolancamentosbackend.controller.ContaController;
 import isaf.tfc.autolancamentosbackend.dto.BalanceteLinhaDTO;
 import isaf.tfc.autolancamentosbackend.dto.BalanceteResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.ContaDTO;
@@ -32,9 +31,11 @@ import java.util.Map;
 public class BalanceteService {
 
     private final LancamentoRepository lancamentoRepository;
+    private final PlanoContasClient planoContasClient;
 
-    public BalanceteService(LancamentoRepository lancamentoRepository) {
+    public BalanceteService(LancamentoRepository lancamentoRepository, PlanoContasClient planoContasClient) {
         this.lancamentoRepository = lancamentoRepository;
+        this.planoContasClient = planoContasClient;
     }
 
     public BalanceteResponseDTO gerarBalancete(LocalDate inicio, LocalDate fim) {
@@ -104,7 +105,7 @@ public class BalanceteService {
     }
 
     private String nomeDaConta(String codigo) {
-        return ContaController.CONTAS.stream()
+        return planoContasClient.listar().stream()
                 .filter(c -> c.getCodigo().equals(codigo))
                 .map(ContaDTO::getNome)
                 .findFirst()
