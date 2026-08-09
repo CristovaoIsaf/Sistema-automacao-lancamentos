@@ -1,7 +1,10 @@
 package isaf.tfc.autolancamentosbackend.repository;
 
 import isaf.tfc.autolancamentosbackend.model.Sugestao;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -10,4 +13,18 @@ public interface SugestaoRepository extends JpaRepository<Sugestao, Long> {
     // Um documento pode ter sido analisado mais do que uma vez (nova
     // tentativa, reanálise) — por isso é uma lista, não um resultado único.
     List<Sugestao> findAllByDocumentoId(Long documentoId);
+
+    // Fase 3 — Context Engine: histórico relevante de uma entidade (as
+    // classificações mais recentes dos seus documentos), usado para
+    // construir o "contexto" compacto de uma operação. Sub-query em vez de
+    // relação JPA porque Documento/Sugestao não têm relação directa (ver
+    // padrão de ids soltos já usado no resto do projecto).
+    @Query("""
+            SELECT s FROM Sugestao s
+            WHERE s.documentoId IN (
+                SELECT d.id FROM DocumentoContabilistico d WHERE d.entidadeId = :entidadeId
+            )
+            ORDER BY s.dataCriacao DESC
+            """)
+    List<Sugestao> findRecentesPorEntidade(@Param("entidadeId") Long entidadeId, Pageable pageable);
 }

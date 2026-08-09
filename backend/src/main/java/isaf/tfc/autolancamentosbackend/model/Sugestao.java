@@ -70,6 +70,21 @@ public class Sugestao {
     @Column(name = "validacao_json", columnDefinition = "TEXT")
     private String validacaoJson;
 
+    // Contexto usado para esta classificação (Fase 3 — Context Engine, ver
+    // ContextoClassificacaoService), serializado em JSON, tal como
+    // validacaoJson. Puramente para RASTREABILIDADE nesta fase — a
+    // classificação em si ainda não o consome (isso é a Fase 5). Aditiva:
+    // sugestões antigas ficam com null.
+    @Column(name = "contexto_json", columnDefinition = "TEXT")
+    private String contextoJson;
+
+    // Fase 4 — "contextualização assistida" (ver
+    // PerguntaContextualizacaoDTO), serializada em JSON, tal como
+    // validacaoJson. null quando a classificação já foi confiante e não
+    // houve nenhuma pergunta a fazer.
+    @Column(name = "pergunta_contextualizacao_json", columnDefinition = "TEXT")
+    private String perguntaContextualizacaoJson;
+
     @Enumerated(EnumType.STRING)
     private EstadoSugestao estado;
 

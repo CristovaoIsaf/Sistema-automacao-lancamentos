@@ -8,8 +8,9 @@ import { listarContas } from '../api/contaApi';
 import { listarCategoriasConta } from '../api/categoriaContaApi';
 import type { CategoriaConta, ContaResumo } from '../types/categoriaConta';
 import type { LancamentoResponse } from '../types/lancamento';
-import type { Sugestao } from '../types/documento';
+import type { OpcaoContextualizacao, Sugestao } from '../types/documento';
 import { ValidacaoDocumento } from '../components/ValidacaoDocumento';
+import { ContextualizacaoAssistida } from '../components/ContextualizacaoAssistida';
 import { toast } from 'sonner';
 
 interface Linha {
@@ -41,6 +42,20 @@ interface LinhaSugerida {
   descricao?: string;
 }
 
+// Converte LinhaSugeridaDTO (backend) para o mesmo formato de Linha usado
+// no formulário manual — reaproveitado tanto para Sugestao.linhasJson
+// (parseLinhasSugeridas) como para a opção escolhida na contextualização
+// assistida (Fase 4, ver escolherOpcaoContextualizacao).
+function linhasSugeridasParaLinhas(bruto: LinhaSugerida[]): Linha[] {
+  return bruto.map(l => ({
+    id: crypto.randomUUID(),
+    conta: l.conta,
+    descricao: l.descricao ?? '',
+    debito: l.debito ?? '',
+    credito: l.credito ?? '',
+  }));
+}
+
 // Sugestao.linhasJson é uma lista de LinhaSugeridaDTO serializada pelo
 // backend — converte para o mesmo formato de Linha usado no formulário
 // manual, para o utilizador poder editar exactamente o que a IA propôs.
@@ -48,13 +63,7 @@ function parseLinhasSugeridas(linhasJson?: string | null): Linha[] {
   if (!linhasJson) return [];
   try {
     const bruto = JSON.parse(linhasJson) as LinhaSugerida[];
-    return bruto.map(l => ({
-      id: crypto.randomUUID(),
-      conta: l.conta,
-      descricao: l.descricao ?? '',
-      debito: l.debito ?? '',
-      credito: l.credito ?? '',
-    }));
+    return linhasSugeridasParaLinhas(bruto);
   } catch (err) {
     console.error('Não foi possível interpretar as linhas sugeridas:', err);
     return [];
@@ -103,6 +112,11 @@ export function LancamentoDiario() {
   // de "Registar Lançamento". Fica null para um lançamento 100% manual.
   const [sugestaoAtual, setSugestaoAtual] = useState<Sugestao | null>(sugestaoRecebida);
   const [aProcessarSugestao, setAProcessarSugestao] = useState(false);
+
+  // Fase 4 — contextualização assistida: depois de o contabilista
+  // escolher uma opção, esconde a pergunta (já respondida) sem precisar
+  // de ir buscar a Sugestao outra vez ao servidor.
+  const [contextualizacaoRespondida, setContextualizacaoRespondida] = useState(false);
 
   // Histórico dos últimos lançamentos registados nesta página — manuais e
   // sugestões da IA aprovadas/editadas aqui — recarregado sempre que um
@@ -266,6 +280,18 @@ export function LancamentoDiario() {
     }
   };
 
+  // Fase 4 — aplica a opção escolhida pelo contabilista: linhas/categoria
+  // já vêm pré-calculadas pelo FastAPI (ver ContextualizacaoAssistida),
+  // não é preciso pedir nada de novo ao servidor.
+  const escolherOpcaoContextualizacao = (opcao: OpcaoContextualizacao) => {
+    const novasLinhas = linhasSugeridasParaLinhas(opcao.linhas);
+    setLinhas(novasLinhas.length > 0 ? novasLinhas : [novaLinha(), novaLinha()]);
+    if (opcao.categoria) setCategoriaSelecionada(opcao.categoria);
+    setSugestaoAtual(prev => prev ? { ...prev, tipoDocumento: opcao.tipo } : prev);
+    setContextualizacaoRespondida(true);
+    toast.success(`Contexto aplicado: ${opcao.rotulo}`);
+  };
+
   const anularSugestao = async () => {
     if (!sugestaoAtual) return;
 
@@ -305,6 +331,13 @@ export function LancamentoDiario() {
 
       {sugestaoAtual && sugestaoAtual.estado === 'PENDENTE' && (
         <ValidacaoDocumento validacaoJson={sugestaoAtual.validacaoJson} />
+      )}
+
+      {sugestaoAtual && sugestaoAtual.estado === 'PENDENTE' && !contextualizacaoRespondida && (
+        <ContextualizacaoAssistida
+          perguntaContextualizacaoJson={sugestaoAtual.perguntaContextualizacaoJson}
+          onEscolher={escolherOpcaoContextualizacao}
+        />
       )}
 
       <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">

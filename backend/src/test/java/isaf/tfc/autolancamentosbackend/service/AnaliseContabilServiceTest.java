@@ -58,6 +58,7 @@ class AnaliseContabilServiceTest {
                 sugestaoRepository,
                 lancamentoRepository,
                 Mockito.mock(EntidadeService.class),
+                Mockito.mock(ContextoClassificacaoService.class),
                 new ObjectMapper()
         );
     }

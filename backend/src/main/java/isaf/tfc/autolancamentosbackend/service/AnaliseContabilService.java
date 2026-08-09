@@ -4,9 +4,11 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import isaf.tfc.autolancamentosbackend.dto.AnaliseResponse;
 import isaf.tfc.autolancamentosbackend.dto.AprovarSugestaoRequest;
+import isaf.tfc.autolancamentosbackend.dto.ContextoClassificacaoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaSugeridaDTO;
+import isaf.tfc.autolancamentosbackend.dto.PerguntaContextualizacaoDTO;
 import isaf.tfc.autolancamentosbackend.dto.ValidacaoDTO;
 import isaf.tfc.autolancamentosbackend.model.*;
 import isaf.tfc.autolancamentosbackend.repository.DocumentoRepository;
@@ -25,6 +27,7 @@ public class AnaliseContabilService {
     private final SugestaoRepository sugestaoRepository;
     private final LancamentoRepository lancamentoRepository;
     private final EntidadeService entidadeService;
+    private final ContextoClassificacaoService contextoClassificacaoService;
     private final ObjectMapper objectMapper;
 
     public AnaliseContabilService(AnalisadorDocumentoIA analisadorDocumentoIA,
@@ -32,12 +35,14 @@ public class AnaliseContabilService {
                                    SugestaoRepository sugestaoRepository,
                                    LancamentoRepository lancamentoRepository,
                                    EntidadeService entidadeService,
+                                   ContextoClassificacaoService contextoClassificacaoService,
                                    ObjectMapper objectMapper) {
         this.analisadorDocumentoIA = analisadorDocumentoIA;
         this.documentoRepository = documentoRepository;
         this.sugestaoRepository = sugestaoRepository;
         this.lancamentoRepository = lancamentoRepository;
         this.entidadeService = entidadeService;
+        this.contextoClassificacaoService = contextoClassificacaoService;
         this.objectMapper = objectMapper;
     }
 
@@ -57,9 +62,24 @@ public class AnaliseContabilService {
             throw new RuntimeException("A API de análise devolveu uma resposta vazia.");
         }
 
+        String tipoDocumento = valorOuDefeito(analise.getTipoDocumento(), "a_classificar");
+
+        // T2 — arquivo por entidade: resolve/cria a entidade de origem (cliente
+        // ou fornecedor) a partir do NIF/nome que a análise devolveu. Feito
+        // ANTES de construir a Sugestao para o Context Engine (Fase 3) já
+        // poder usar o histórico desta entidade — não influencia a
+        // classificação já feita (isso é a Fase 5), só fica registado para
+        // rastreabilidade em contextoJson.
+        Entidade entidade = entidadeService.resolverOuCriar(
+                analise.getNif(), analise.getEntidade(), tipoDocumento);
+        documento.setEntidadeId(entidade.getId());
+        documentoRepository.save(documento);
+
+        ContextoClassificacaoDTO contexto = contextoClassificacaoService.construirContexto(entidade.getId());
+
         Sugestao sugestao = new Sugestao();
         sugestao.setDocumentoId(documentoId);
-        sugestao.setTipoDocumento(valorOuDefeito(analise.getTipoDocumento(), "a_classificar"));
+        sugestao.setTipoDocumento(tipoDocumento);
         sugestao.setCategoriaContabil(extrairCategoriaContabil(analise.getLinhas()));
         sugestao.setValor(valorOuDefeito(analise.getValorTotal(), "0"));
         sugestao.setEntidade(analise.getEntidade());
@@ -70,19 +90,11 @@ public class AnaliseContabilService {
         sugestao.setFundamentacao(analise.getFundamentacao());
         sugestao.setCategoria(analise.getCategoria());
         sugestao.setValidacaoJson(serializarValidacao(analise.getValidacao()));
+        sugestao.setContextoJson(serializarContexto(contexto));
+        sugestao.setPerguntaContextualizacaoJson(serializarPergunta(analise.getPerguntaContextualizacao()));
         sugestao.setEstado(EstadoSugestao.PENDENTE);
 
-        Sugestao salva = sugestaoRepository.save(sugestao);
-
-        // T2 — arquivo por entidade: resolve/cria a entidade de origem (cliente
-        // ou fornecedor) a partir do NIF/nome que a análise devolveu, e liga-a
-        // ao documento para a exportação em ZIP conseguir agrupar por pasta.
-        Entidade entidade = entidadeService.resolverOuCriar(
-                analise.getNif(), analise.getEntidade(), sugestao.getTipoDocumento());
-        documento.setEntidadeId(entidade.getId());
-        documentoRepository.save(documento);
-
-        return salva;
+        return sugestaoRepository.save(sugestao);
     }
 
     /**
@@ -241,6 +253,28 @@ public class AnaliseContabilService {
             return objectMapper.writeValueAsString(validacao);
         } catch (JacksonException e) {
             throw new RuntimeException("Não foi possível guardar o resultado da validação: " + e.getMessage(), e);
+        }
+    }
+
+    private String serializarContexto(ContextoClassificacaoDTO contexto) {
+        if (contexto == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(contexto);
+        } catch (JacksonException e) {
+            throw new RuntimeException("Não foi possível guardar o contexto de classificação: " + e.getMessage(), e);
+        }
+    }
+
+    private String serializarPergunta(PerguntaContextualizacaoDTO pergunta) {
+        if (pergunta == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(pergunta);
+        } catch (JacksonException e) {
+            throw new RuntimeException("Não foi possível guardar a pergunta de contextualização: " + e.getMessage(), e);
         }
     }
 

@@ -48,4 +48,10 @@ public class AnaliseResponse {
     // via Documento.hashConteudo (mesmo documentoId); serve aqui só para
     // confirmar/depurar o valor realmente usado nesta análise.
     private String fingerprint;
+
+    // Fase 4 do plano de 20 fases — "contextualização assistida": só vem
+    // preenchido quando o FastAPI não conseguiu decidir sozinho o tipo de
+    // operação (ver document_analyzer.py::_construir_pergunta_contextualizacao).
+    // null no caso normal (classificação já confiante).
+    private PerguntaContextualizacaoDTO perguntaContextualizacao;
 }

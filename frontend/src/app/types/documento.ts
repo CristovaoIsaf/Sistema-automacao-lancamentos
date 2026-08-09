@@ -39,6 +39,11 @@ export interface Sugestao {
   // Usar parseValidacao (components/ValidacaoDocumento.tsx) antes de
   // mostrar — null para sugestões antigas, gravadas antes desta fase.
   validacaoJson?: string | null;
+  // Fase 4 do plano de 20 fases — "contextualização assistida", serializada
+  // em JSON. Usar parsePerguntaContextualizacao
+  // (components/ContextualizacaoAssistida.tsx) — null quando a
+  // classificação já foi confiante e não houve pergunta nenhuma a fazer.
+  perguntaContextualizacaoJson?: string | null;
   lancamentoId?: number | null;
   estado: string;
 }
@@ -54,4 +59,26 @@ export interface ResultadoValidacao {
   valido: boolean;
   versao: string;
   problemas: ProblemaValidacao[];
+}
+
+// Espelha LinhaSugeridaDTO (backend) — mesma forma usada em Sugestao.linhasJson.
+export interface LinhaSugeridaContexto {
+  conta: string;
+  nome?: string;
+  debito?: string | null;
+  credito?: string | null;
+  descricao?: string;
+}
+
+export interface OpcaoContextualizacao {
+  valor: string;
+  rotulo: string;
+  tipo: string;
+  categoria?: string | null;
+  linhas: LinhaSugeridaContexto[];
+}
+
+export interface PerguntaContextualizacao {
+  pergunta: string;
+  opcoes: OpcaoContextualizacao[];
 }

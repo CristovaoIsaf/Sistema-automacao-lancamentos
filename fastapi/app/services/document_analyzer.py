@@ -180,6 +180,61 @@ class DocumentAnalyzer:
             "fundamentacao": c.get("fundamentacao", ""),
             "categoria": pgc_ao.categoria_do_tipo(tipo),
             "linhas": linhas,
+            # Fase 4 do plano de 20 fases — contextualização assistida: só
+            # preenchido quando o sistema realmente não conseguiu decidir
+            # sozinho (nunca quando já há confiança suficiente).
+            "perguntaContextualizacao": (
+                self._construir_pergunta_contextualizacao(dados_fatura)
+                if tipo == pgc_ao.TIPO_A_CLASSIFICAR else None
+            ),
+        }
+
+    def _construir_pergunta_contextualizacao(self, dados_fatura: Dict[str, Any]) -> Dict[str, Any]:
+        """Fase 4 — contextualização assistida: quando regras + perfil + IA
+        não conseguiram decidir o tipo de operação, pergunta UMA coisa
+        específica ao contabilista em vez de o deixar a rever tudo às
+        cegas. Não é um chatbot genérico — pergunta fechada, com opções
+        fixas e um resultado (linhas) já pré-calculado por opção, para o
+        frontend aplicar a escolha instantaneamente sem novo pedido ao
+        FastAPI.
+
+        Só oferece opções que o pgc_ao consiga mesmo construir com uma
+        conta real do Decreto 82/01 (mercadoria, serviço). "Ativo para
+        utilização"/"equipamento administrativo" — do exemplo original do
+        mapa de impacto — não têm conta de imobilizado modelada neste
+        TFC; nunca inventar aqui um código de conta não verificado. É
+        mais correcto o contabilista escolher "Outro" e rever manualmente
+        do que o sistema sugerir uma conta errada com ar de confiança.
+        """
+        valor = dados_fatura.get("valor_total_aoa") or "0"
+        taxa_iva = self._taxa_iva_tratada(dados_fatura)
+
+        candidatos = [
+            ("mercadoria_revenda", "Mercadoria para revenda", pgc_ao.TIPO_COMPRA_MERCADORIA),
+            ("servico", "Serviço", pgc_ao.TIPO_COMPRA_SERVICO),
+        ]
+
+        opcoes = []
+        for valor_opcao, rotulo, tipo_opcao in candidatos:
+            opcoes.append({
+                "valor": valor_opcao,
+                "rotulo": rotulo,
+                "tipo": tipo_opcao,
+                "categoria": pgc_ao.categoria_do_tipo(tipo_opcao),
+                "linhas": pgc_ao.construir_lancamento(tipo_opcao, valor, "", taxa_iva=taxa_iva),
+            })
+
+        opcoes.append({
+            "valor": "outro",
+            "rotulo": "Outro / não tenho a certeza — rever manualmente",
+            "tipo": pgc_ao.TIPO_A_CLASSIFICAR,
+            "categoria": pgc_ao.categoria_do_tipo(pgc_ao.TIPO_A_CLASSIFICAR),
+            "linhas": pgc_ao.construir_lancamento(pgc_ao.TIPO_A_CLASSIFICAR, valor, ""),
+        })
+
+        return {
+            "pergunta": "Qual a finalidade deste documento?",
+            "opcoes": opcoes,
         }
 
     def _entidade_e_nif(self, tipo: str, dados_fatura: Dict[str, Any]) -> tuple:
