@@ -7,6 +7,7 @@ import isaf.tfc.autolancamentosbackend.model.Lancamento;
 import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
@@ -53,10 +54,36 @@ class LancamentoServiceImplTest {
                 )
         );
 
-        LancamentoResponseDTO resposta = service.criarLancamentoManual(request);
+        LancamentoResponseDTO resposta = service.criarLancamentoManual(request, 7L);
 
         assertThat(resposta.getLinhas()).hasSize(3);
         assertThat(resposta.getId()).isNotNull();
+    }
+
+    @Test
+    void criarLancamentoManual_preservaDescricaoDaLinhaERegistaQuemCriou() {
+        // Fase 7 do plano de 20 fases: antes desta fase, LinhaLancamento.descricao
+        // ficava sempre null para lançamentos manuais (só a descrição do
+        // Lancamento era gravada) e Lancamento.validadoPor nunca era
+        // preenchido — nenhum registo de quem criou o lançamento.
+        LancamentoRequestDTO request = new LancamentoRequestDTO(
+                LocalDate.now(),
+                "Pagamento de renda",
+                List.of(
+                        new LinhaLancamentoDTO("75.2.21", new BigDecimal("50000.00"), null, "Renda do escritório — Março"),
+                        new LinhaLancamentoDTO("45", null, new BigDecimal("50000.00"), null)
+                )
+        );
+
+        LancamentoResponseDTO resposta = service.criarLancamentoManual(request, 42L);
+
+        assertThat(resposta.getLinhas().get(0).getDescricao()).isEqualTo("Renda do escritório — Março");
+        // Linha sem descrição própria cai no fallback da descrição do lançamento.
+        assertThat(resposta.getLinhas().get(1).getDescricao()).isEqualTo("Pagamento de renda");
+
+        ArgumentCaptor<Lancamento> captor = ArgumentCaptor.forClass(Lancamento.class);
+        Mockito.verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getValidadoPor()).isEqualTo(42L);
     }
 
     @Test
@@ -70,7 +97,7 @@ class LancamentoServiceImplTest {
                 )
         );
 
-        assertThatThrownBy(() -> service.criarLancamentoManual(request))
+        assertThatThrownBy(() -> service.criarLancamentoManual(request, 7L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("não está equilibrado");
     }
@@ -88,7 +115,7 @@ class LancamentoServiceImplTest {
                 )
         );
 
-        LancamentoResponseDTO resposta = service.criarLancamentoManual(request);
+        LancamentoResponseDTO resposta = service.criarLancamentoManual(request, 7L);
 
         assertThat(resposta.getLinhas()).hasSize(3);
     }

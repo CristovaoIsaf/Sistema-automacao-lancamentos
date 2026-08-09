@@ -146,15 +146,15 @@ public class AnaliseContabilService {
         boolean temOverride = request != null && request.getLinhas() != null && !request.getLinhas().isEmpty();
 
         if (temOverride) {
-            for (LinhaLancamentoDTO linhaDTO : request.getLinhas()) {
-                LinhaLancamento linha = new LinhaLancamento();
-                linha.setConta(linhaDTO.getConta());
-                linha.setDebito(linhaDTO.getDebito());
-                linha.setCredito(linhaDTO.getCredito());
-                linha.setDescricao(linhaDTO.getDescricao() != null ? linhaDTO.getDescricao() : sugestao.getDescricao());
-                linha.setLancamento(lancamento);
-                lancamento.getLinhas().add(linha);
-            }
+            // Fase 7 — mesmo domínio partilhado com LancamentoServiceImpl
+            // (criarLancamentoManual): construirLinhas trata a conversão
+            // DTO→entidade e o fallback de descrição da mesma forma nos
+            // dois sítios onde uma LinhaLancamentoDTO chega vinda do
+            // contabilista (aqui, revisão antes de aprovar; lá, lançamento
+            // manual).
+            List<LinhaLancamento> linhas = PartidasDobradas.construirLinhas(request.getLinhas(), sugestao.getDescricao());
+            linhas.forEach(linha -> linha.setLancamento(lancamento));
+            lancamento.getLinhas().addAll(linhas);
             PartidasDobradas.validarEquilibrio(lancamento.getLinhas());
             lancamento.setEditadoManualmente(request.isEditado());
         } else {

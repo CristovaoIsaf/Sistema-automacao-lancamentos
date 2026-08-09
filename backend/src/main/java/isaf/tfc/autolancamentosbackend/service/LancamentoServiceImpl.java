@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -29,15 +28,12 @@ public class LancamentoServiceImpl implements LancamentoService {
     @Override
     @Transactional
     public LancamentoResponseDTO criarLancamentoManual(
-            LancamentoRequestDTO request
+            LancamentoRequestDTO request,
+            Long criadoPor
     ) {
 
 
-        // 1. Validar antes de criar
-        validarEquilibrio(request.getLinhas());
-
-
-        // 2. Criar lançamento
+        // 1. Criar lançamento
         Lancamento lancamento =
                 new Lancamento();
 
@@ -47,6 +43,8 @@ public class LancamentoServiceImpl implements LancamentoService {
         lancamento.setDescricao(
                 request.getDescricao()
         );
+
+        lancamento.setValidadoPor(criadoPor);
 
 
         // VALIDADO logo na criação: ao contrário de uma Sugestao da IA (que
@@ -65,34 +63,21 @@ public class LancamentoServiceImpl implements LancamentoService {
         );
 
 
-        // 3. Criar linhas
-        request.getLinhas()
-                .forEach(linhaDTO -> {
+        // 2. Construir linhas (mesmo domínio partilhado com
+        // AnaliseContabilService — ver PartidasDobradas, Fase 7) e validar
+        // equilíbrio ANTES de associar ao lançamento a gravar.
+        List<LinhaLancamento> linhas =
+                PartidasDobradas.construirLinhas(request.getLinhas(), request.getDescricao());
 
-                    LinhaLancamento linha =
-                            new LinhaLancamento();
+        PartidasDobradas.validarEquilibrio(linhas);
 
-                    linha.setConta(
-                            linhaDTO.getConta()
-                    );
-
-                    linha.setDebito(
-                            linhaDTO.getDebito()
-                    );
-
-                    linha.setCredito(
-                            linhaDTO.getCredito()
-                    );
-
-                    linha.setLancamento(lancamento);
+        linhas.forEach(linha -> {
+            linha.setLancamento(lancamento);
+            lancamento.getLinhas().add(linha);
+        });
 
 
-                    lancamento.getLinhas()
-                            .add(linha);
-                });
-
-
-        // 4. Guardar
+        // 3. Guardar
         Lancamento salvo =
                 repository.save(lancamento);
 
@@ -232,33 +217,5 @@ public class LancamentoServiceImpl implements LancamentoService {
 
 
         return dto;
-    }
-    private void validarEquilibrio(
-            List<LinhaLancamentoDTO> linhas
-    ){
-
-        // Cada linha normalmente só preenche débito OU crédito (nunca os
-        // dois) — o valor nulo do lado não usado é o caso normal, não uma
-        // exceção. Sem o "!= null ? ... : ZERO" abaixo, BigDecimal::add
-        // rebenta com NullPointerException em qualquer lançamento real.
-        BigDecimal totalDebito =
-                linhas.stream()
-                        .map(linha -> linha.getDebito() != null ? linha.getDebito() : BigDecimal.ZERO)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-
-        BigDecimal totalCredito =
-                linhas.stream()
-                        .map(linha -> linha.getCredito() != null ? linha.getCredito() : BigDecimal.ZERO)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-
-        if(totalDebito.compareTo(totalCredito) != 0){
-
-            throw new RuntimeException(
-                    "O lançamento não está equilibrado"
-            );
-        }
-
     }
 }

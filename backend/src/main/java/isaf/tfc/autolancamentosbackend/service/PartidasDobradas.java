@@ -1,15 +1,26 @@
 package isaf.tfc.autolancamentosbackend.service;
 
+import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.model.LinhaLancamento;
 
 import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Parsing de valores monetários e validação de equilíbrio débito/crédito —
- * extraído de AnaliseContabilService para ser testável isoladamente (peça
- * central do desenvolvimento incremental: sem isto, um lançamento
- * desequilibrado nunca deveria chegar a ser gravado).
+ * Parsing de valores monetários, construção de linhas e validação de
+ * equilíbrio débito/crédito — extraído de AnaliseContabilService para ser
+ * testável isoladamente (peça central do desenvolvimento incremental: sem
+ * isto, um lançamento desequilibrado nunca deveria chegar a ser gravado).
+ *
+ * Fase 7 do plano de 20 fases ("única fonte de verdade para lançamentos,
+ * mas todos devem passar pelo mesmo domínio"): construirLinhas/
+ * validarEquilibrio são agora o único ponto onde uma LinhaLancamentoDTO
+ * (origem MANUAL — ver LancamentoServiceImpl — ou revisão do contabilista
+ * antes de aprovar uma Sugestao — ver AnaliseContabilService) vira uma
+ * LinhaLancamento persistível. Antes desta fase, LancamentoServiceImpl
+ * mantinha a sua própria validarEquilibrio (reimplementação da mesma soma
+ * débito/crédito) e nunca copiava linhaDTO.descricao para a entidade — os
+ * lançamentos manuais ficavam sempre com LinhaLancamento.descricao null.
  */
 public final class PartidasDobradas {
 
@@ -52,9 +63,10 @@ public final class PartidasDobradas {
     }
 
     /**
-     * Verificação defensiva: as linhas devolvidas pela API de análise já
-     * deviam estar equilibradas (pgc_ao valida isso do lado do FastAPI), mas
-     * confirma-se aqui também antes de gravar o Lancamento oficial.
+     * Verificação defensiva antes de gravar QUALQUER Lancamento, seja de
+     * origem AUTOMATICO (a API de análise já devia ter devolvido linhas
+     * equilibradas — pgc_ao valida isso do lado do FastAPI) ou MANUAL (o
+     * contabilista pode ter-se enganado a preencher débito/crédito).
      */
     public static void validarEquilibrio(List<LinhaLancamento> linhas) {
         BigDecimal totalDebito = linhas.stream()
@@ -66,7 +78,25 @@ public final class PartidasDobradas {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         if (totalDebito.compareTo(totalCredito) != 0) {
-            throw new RuntimeException("O lançamento automático não está equilibrado.");
+            throw new RuntimeException("O lançamento não está equilibrado.");
         }
+    }
+
+    /**
+     * Converte uma LinhaLancamentoDTO (origem MANUAL ou revisão do
+     * contabilista antes de aprovar uma Sugestao) numa LinhaLancamento
+     * persistível. `descricaoDefeito` é usada quando a própria linha não
+     * traz descrição (ex: o contabilista só preencheu conta/valor) — o
+     * mesmo padrão já usado em AnaliseContabilService antes desta fase.
+     */
+    public static List<LinhaLancamento> construirLinhas(List<LinhaLancamentoDTO> dtos, String descricaoDefeito) {
+        return dtos.stream().map(dto -> {
+            LinhaLancamento linha = new LinhaLancamento();
+            linha.setConta(dto.getConta());
+            linha.setDebito(dto.getDebito());
+            linha.setCredito(dto.getCredito());
+            linha.setDescricao(dto.getDescricao() != null ? dto.getDescricao() : descricaoDefeito);
+            return linha;
+        }).toList();
     }
 }

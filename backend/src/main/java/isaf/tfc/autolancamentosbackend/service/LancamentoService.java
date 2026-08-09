@@ -10,10 +10,16 @@ import java.util.List;
 public interface LancamentoService {
 
     /**
-     * Regista um lançamento contabilístico manual.
+     * Regista um lançamento contabilístico manual. `criadoPor` (Fase 7 do
+     * plano de 20 fases) é o utilizador autenticado que o registou — antes
+     * desta fase, Lancamento.validadoPor ficava sempre null para origem
+     * MANUAL, uma lacuna de rastreabilidade/auditoria (só os lançamentos
+     * AUTOMATICO, aprovados via AnaliseContabilService, guardavam quem os
+     * validou).
      */
     LancamentoResponseDTO criarLancamentoManual(
-            LancamentoRequestDTO request
+            LancamentoRequestDTO request,
+            Long criadoPor
     );
 
 

@@ -4,6 +4,7 @@ import isaf.tfc.autolancamentosbackend.dto.LancamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
+import isaf.tfc.autolancamentosbackend.model.User;
 import isaf.tfc.autolancamentosbackend.service.LancamentoService;
 
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
@@ -46,11 +48,12 @@ public class LancamentoController {
     @PreAuthorize("hasRole('CONTABILISTA')")
     @PostMapping
     public ResponseEntity<LancamentoResponseDTO> criar(
-            @RequestBody LancamentoRequestDTO request
+            @RequestBody LancamentoRequestDTO request,
+            @AuthenticationPrincipal User user
     ){
 
         LancamentoResponseDTO response =
-                service.criarLancamentoManual(request);
+                service.criarLancamentoManual(request, user.getId());
 
 
         return ResponseEntity
