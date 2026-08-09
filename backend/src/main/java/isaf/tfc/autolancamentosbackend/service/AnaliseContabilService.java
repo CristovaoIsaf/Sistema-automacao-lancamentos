@@ -6,7 +6,6 @@ import isaf.tfc.autolancamentosbackend.dto.AnaliseResponse;
 import isaf.tfc.autolancamentosbackend.dto.AprovarSugestaoRequest;
 import isaf.tfc.autolancamentosbackend.dto.ContextoClassificacaoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
-import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaSugeridaDTO;
 import isaf.tfc.autolancamentosbackend.dto.PerguntaContextualizacaoDTO;
 import isaf.tfc.autolancamentosbackend.dto.ValidacaoDTO;
@@ -28,6 +27,7 @@ public class AnaliseContabilService {
     private final LancamentoRepository lancamentoRepository;
     private final EntidadeService entidadeService;
     private final ContextoClassificacaoService contextoClassificacaoService;
+    private final LancamentoEnriquecimentoService enriquecimentoService;
     private final ObjectMapper objectMapper;
 
     public AnaliseContabilService(AnalisadorDocumentoIA analisadorDocumentoIA,
@@ -36,6 +36,7 @@ public class AnaliseContabilService {
                                    LancamentoRepository lancamentoRepository,
                                    EntidadeService entidadeService,
                                    ContextoClassificacaoService contextoClassificacaoService,
+                                   LancamentoEnriquecimentoService enriquecimentoService,
                                    ObjectMapper objectMapper) {
         this.analisadorDocumentoIA = analisadorDocumentoIA;
         this.documentoRepository = documentoRepository;
@@ -43,6 +44,7 @@ public class AnaliseContabilService {
         this.lancamentoRepository = lancamentoRepository;
         this.entidadeService = entidadeService;
         this.contextoClassificacaoService = contextoClassificacaoService;
+        this.enriquecimentoService = enriquecimentoService;
         this.objectMapper = objectMapper;
     }
 
@@ -189,7 +191,7 @@ public class AnaliseContabilService {
         sugestao.setLancamentoId(salvo.getId());
         sugestaoRepository.save(sugestao);
 
-        return converterParaDTO(salvo);
+        return enriquecimentoService.converter(salvo);
     }
 
     /**
@@ -223,34 +225,6 @@ public class AnaliseContabilService {
             return null;
         }
         return linhas.get(0).getConta();
-    }
-
-    /**
-     * Converte a entidade Lancamento para DTO antes de a devolver ao
-     * controller — devolver a entidade diretamente serializa também a
-     * relação inversa LinhaLancamento.lancamento, criando um ciclo.
-     */
-    private LancamentoResponseDTO converterParaDTO(Lancamento lancamento) {
-        LancamentoResponseDTO dto = new LancamentoResponseDTO();
-
-        dto.setId(lancamento.getId());
-        dto.setData(lancamento.getData());
-        dto.setDescricao(lancamento.getDescricao());
-        dto.setEstado(lancamento.getEstado());
-        dto.setOrigem(lancamento.getOrigem());
-        dto.setEditadoManualmente(lancamento.getEditadoManualmente());
-
-        List<LinhaLancamentoDTO> linhas = lancamento.getLinhas().stream()
-                .map(linha -> new LinhaLancamentoDTO(
-                        linha.getConta(),
-                        linha.getDebito(),
-                        linha.getCredito(),
-                        linha.getDescricao()))
-                .toList();
-
-        dto.setLinhas(linhas);
-
-        return dto;
     }
 
     private String serializarValidacao(ValidacaoDTO validacao) {

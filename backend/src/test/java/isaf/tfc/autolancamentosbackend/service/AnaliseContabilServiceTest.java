@@ -52,6 +52,22 @@ class AnaliseContabilServiceTest {
         });
         when(sugestaoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
+        LancamentoEnriquecimentoService enriquecimentoService = Mockito.mock(LancamentoEnriquecimentoService.class);
+        when(enriquecimentoService.converter(any())).thenAnswer(inv -> {
+            Lancamento l = inv.getArgument(0);
+            LancamentoResponseDTO dto = new LancamentoResponseDTO();
+            dto.setId(l.getId());
+            dto.setData(l.getData());
+            dto.setDescricao(l.getDescricao());
+            dto.setEstado(l.getEstado());
+            dto.setOrigem(l.getOrigem());
+            dto.setEditadoManualmente(l.getEditadoManualmente());
+            dto.setLinhas(l.getLinhas().stream()
+                    .map(linha -> new LinhaLancamentoDTO(linha.getConta(), linha.getDebito(), linha.getCredito(), linha.getDescricao()))
+                    .toList());
+            return dto;
+        });
+
         service = new AnaliseContabilService(
                 Mockito.mock(AnalisadorDocumentoIA.class),
                 Mockito.mock(DocumentoRepository.class),
@@ -59,6 +75,7 @@ class AnaliseContabilServiceTest {
                 lancamentoRepository,
                 Mockito.mock(EntidadeService.class),
                 Mockito.mock(ContextoClassificacaoService.class),
+                enriquecimentoService,
                 new ObjectMapper()
         );
     }

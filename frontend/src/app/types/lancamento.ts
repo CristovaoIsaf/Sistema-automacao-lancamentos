@@ -36,4 +36,17 @@ export interface LancamentoResponse {
 
     linhas: LinhaLancamento[];
 
+    // Fase 9 do plano de 20 fases — histórico filtrável por documento/
+    // entidade/utilizador (ver LancamentoEnriquecimentoService no backend).
+    // null para lançamentos MANUAL (sem documento/entidade de origem).
+    documentoId?: number | null;
+
+    entidadeId?: number | null;
+
+    entidadeNome?: string | null;
+
+    validadoPor?: number | null;
+
+    validadoPorNome?: string | null;
+
 }

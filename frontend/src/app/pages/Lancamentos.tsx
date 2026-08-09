@@ -181,6 +181,8 @@ export function Lancamentos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
   const [origemFilter, setOrigemFilter] = useState('todos');
+  const [contaFilter, setContaFilter] = useState('');
+  const [utilizadorFilter, setUtilizadorFilter] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [lancamentos, setLancamentos] = useState<LancamentoResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,7 +193,7 @@ export function Lancamentos() {
 
   useEffect(() => {
     listarContas()
-      .then(dados => setContas(dados as unknown as ContaResumo[]))
+      .then(setContas)
       .catch(err => console.error('Erro ao carregar plano de contas:', err));
   }, []);
 
@@ -230,13 +232,26 @@ export function Lancamentos() {
     }
   };
 
+  // Fase 9 do plano de 20 fases — histórico com pesquisa/filtro por
+  // período, conta, entidade, origem, utilizador e estado. Antes desta
+  // fase, o período dos inputs acima só era usado na exportação Excel —
+  // a tabela mostrava sempre todos os lançamentos, sem filtrar por data.
+  const utilizadoresDisponiveis = Array.from(
+    new Set(lancamentos.map(l => l.validadoPorNome).filter((nome): nome is string => !!nome))
+  ).sort();
+
   const filtered = lancamentos.filter(l => {
+    const termo = search.toLowerCase();
     const matchSearch = search === '' ||
-      l.descricao.toLowerCase().includes(search.toLowerCase());
+      l.descricao.toLowerCase().includes(termo) ||
+      (l.entidadeNome ?? '').toLowerCase().includes(termo);
     const matchStatus = statusFilter === 'todos' || l.estado === statusFilter;
     const matchOrigem = origemFilter === 'todos' ||
       (origemFilter === 'ia' ? l.origem === 'AUTOMATICO' : l.origem === 'MANUAL');
-    return matchSearch && matchStatus && matchOrigem;
+    const matchPeriodo = (!periodo.inicio || l.data >= periodo.inicio) && (!periodo.fim || l.data <= periodo.fim);
+    const matchConta = contaFilter === '' || l.linhas.some(linha => linha.conta === contaFilter);
+    const matchUtilizador = utilizadorFilter === '' || l.validadoPorNome === utilizadorFilter;
+    return matchSearch && matchStatus && matchOrigem && matchPeriodo && matchConta && matchUtilizador;
   });
 
   const counts = {
@@ -311,7 +326,7 @@ export function Lancamentos() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Pesquisar descrição..."
+            placeholder="Pesquisar descrição ou entidade..."
             className="w-full h-8 pl-8 pr-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
           />
         </div>
@@ -334,6 +349,25 @@ export function Lancamentos() {
           <option value="ia">IA</option>
           <option value="manual">Manual</option>
         </select>
+        <select
+          value={contaFilter}
+          onChange={e => setContaFilter(e.target.value)}
+          className="h-8 px-2 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all"
+          style={{ fontFamily: 'JetBrains Mono, monospace' }}
+        >
+          <option value="" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Todas as contas</option>
+          {contas.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+        </select>
+        {utilizadoresDisponiveis.length > 0 && (
+          <select
+            value={utilizadorFilter}
+            onChange={e => setUtilizadorFilter(e.target.value)}
+            className="h-8 px-2 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all"
+          >
+            <option value="">Todos os utilizadores</option>
+            {utilizadoresDisponiveis.map(nome => <option key={nome} value={nome}>{nome}</option>)}
+          </select>
+        )}
       </div>
 
       {/* Table */}

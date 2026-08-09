@@ -2,7 +2,6 @@ package isaf.tfc.autolancamentosbackend.service;
 
 import isaf.tfc.autolancamentosbackend.dto.LancamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
-import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 import isaf.tfc.autolancamentosbackend.model.Lancamento;
 import isaf.tfc.autolancamentosbackend.model.LinhaLancamento;
@@ -23,6 +22,9 @@ public class LancamentoServiceImpl implements LancamentoService {
 
 
     private final LancamentoRepository repository;
+    // Fase 9 — único ponto de conversão Lancamento→DTO, partilhado com
+    // AnaliseContabilService (ver LancamentoEnriquecimentoService).
+    private final LancamentoEnriquecimentoService enriquecimentoService;
 
 
     @Override
@@ -82,7 +84,7 @@ public class LancamentoServiceImpl implements LancamentoService {
                 repository.save(lancamento);
 
 
-        return converterParaDTO(salvo);
+        return enriquecimentoService.converter(salvo);
     }
 
     @Override
@@ -94,17 +96,14 @@ public class LancamentoServiceImpl implements LancamentoService {
                                 new RuntimeException("Lançamento não encontrado")
                         );
 
-        return converterParaDTO(lancamento);
+        return enriquecimentoService.converter(lancamento);
     }
 
 
     @Override
     public List<LancamentoResponseDTO> listarTodos() {
 
-        return repository.findAll()
-                .stream()
-                .map(this::converterParaDTO)
-                .toList();
+        return enriquecimentoService.converterTodos(repository.findAll());
     }
 
 
@@ -114,11 +113,9 @@ public class LancamentoServiceImpl implements LancamentoService {
             LocalDate dataFim
     ) {
 
-        return repository
-                .findByDataBetween(dataInicio, dataFim)
-                .stream()
-                .map(this::converterParaDTO)
-                .toList();
+        return enriquecimentoService.converterTodos(
+                repository.findByDataBetween(dataInicio, dataFim)
+        );
     }
 
 
@@ -129,12 +126,13 @@ public class LancamentoServiceImpl implements LancamentoService {
             EstadoLancamento estado
     ) {
 
-        return repository
+        List<Lancamento> lancamentos = repository
                 .findByDataBetween(dataInicio, dataFim)
                 .stream()
                 .filter(lancamento -> estado == null || lancamento.getEstado() == estado)
-                .map(this::converterParaDTO)
                 .toList();
+
+        return enriquecimentoService.converterTodos(lancamentos);
     }
 
 
@@ -156,7 +154,7 @@ public class LancamentoServiceImpl implements LancamentoService {
         lancamento.setData(request.getData());
 
 
-        return converterParaDTO(
+        return enriquecimentoService.converter(
                 repository.save(lancamento)
         );
     }
@@ -176,46 +174,5 @@ public class LancamentoServiceImpl implements LancamentoService {
         lancamento.setEstado(EstadoLancamento.CANCELADO);
 
         repository.save(lancamento);
-    }
-
-
-
-    private LancamentoResponseDTO converterParaDTO(
-            Lancamento lancamento
-    ){
-
-        LancamentoResponseDTO dto =
-                new LancamentoResponseDTO();
-
-
-        dto.setId(lancamento.getId());
-
-        dto.setData(lancamento.getData());
-
-        dto.setDescricao(lancamento.getDescricao());
-
-        dto.setEstado(lancamento.getEstado());
-
-        dto.setOrigem(lancamento.getOrigem());
-
-        dto.setEditadoManualmente(lancamento.getEditadoManualmente());
-
-
-        List<LinhaLancamentoDTO> linhas =
-                lancamento.getLinhas()
-                        .stream()
-                        .map(linha -> new LinhaLancamentoDTO(
-                                linha.getConta(),
-                                linha.getDebito(),
-                                linha.getCredito(),
-                                linha.getDescricao()
-                        ))
-                        .toList();
-
-
-        dto.setLinhas(linhas);
-
-
-        return dto;
     }
 }

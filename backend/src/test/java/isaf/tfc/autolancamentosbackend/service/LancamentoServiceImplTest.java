@@ -20,11 +20,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * Peça "Lançamento manual": LancamentoServiceImpl isolado (repositório
- * mockado). Cobre em particular a correção do NullPointerException em
- * validarEquilibrio — cada linha normalmente só tem débito OU crédito
- * (nunca os dois), que é exatamente o caso real de um multilançamento com
- * linha de IVA separada.
+ * Peça "Lançamento manual": LancamentoServiceImpl isolado (repositório e
+ * LancamentoEnriquecimentoService mockados — este teste cobre a construção
+ * do Lancamento em si, não o enriquecimento com entidade/utilizador, que
+ * tem cobertura própria em LancamentoEnriquecimentoServiceTest). Cobre em
+ * particular a correção do NullPointerException em validarEquilibrio —
+ * cada linha normalmente só tem débito OU crédito (nunca os dois), que é
+ * exatamente o caso real de um multilançamento com linha de IVA separada.
  */
 class LancamentoServiceImplTest {
 
@@ -34,11 +36,29 @@ class LancamentoServiceImplTest {
     @BeforeEach
     void setUp() {
         repository = Mockito.mock(LancamentoRepository.class);
-        service = new LancamentoServiceImpl(repository);
+        LancamentoEnriquecimentoService enriquecimentoService = Mockito.mock(LancamentoEnriquecimentoService.class);
+        service = new LancamentoServiceImpl(repository, enriquecimentoService);
+
         when(repository.save(any())).thenAnswer(inv -> {
             Lancamento l = inv.getArgument(0);
             l.setId(1L);
             return l;
+        });
+        // Simula a conversão real (sem o enriquecimento por entidade/
+        // utilizador, irrelevante para os testes desta classe).
+        when(enriquecimentoService.converter(any())).thenAnswer(inv -> {
+            Lancamento l = inv.getArgument(0);
+            LancamentoResponseDTO dto = new LancamentoResponseDTO();
+            dto.setId(l.getId());
+            dto.setData(l.getData());
+            dto.setDescricao(l.getDescricao());
+            dto.setEstado(l.getEstado());
+            dto.setOrigem(l.getOrigem());
+            dto.setEditadoManualmente(l.getEditadoManualmente());
+            dto.setLinhas(l.getLinhas().stream()
+                    .map(linha -> new LinhaLancamentoDTO(linha.getConta(), linha.getDebito(), linha.getCredito(), linha.getDescricao()))
+                    .toList());
+            return dto;
         });
     }
 
