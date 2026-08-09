@@ -49,6 +49,13 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private Role papel;
 
+    // Aditivo (Fase 1 — modelo de empresa/utilizadores): o utilizador
+    // pertence ao contexto da empresa da instalação. Sem relação JPA, para
+    // manter o padrão já usado nas outras entidades (ver DocumentoContabilistico).
+    // Preenchido automaticamente com a empresa única em UserService.criar —
+    // este projecto é single-tenant, não multi-empresa.
+    private Long empresaId;
+
 
     // Antes devolvia sempre List.of() — nenhum papel era exposto ao Spring
     // Security, por isso hasRole()/@PreAuthorize nunca tinham nada para

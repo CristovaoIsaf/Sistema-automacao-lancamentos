@@ -23,6 +23,13 @@ public class EmpresaService {
         return converterParaDTO(buscarUnica());
     }
 
+    // Fase 1 — modelo de empresa/utilizadores: usado por UserService.criar
+    // para ligar cada novo utilizador ao contexto da empresa única desta
+    // instalação (ver nota em User.empresaId).
+    public Long idDaEmpresaUnica() {
+        return buscarUnica().getId();
+    }
+
     public EmpresaDTO atualizarEmpresa(EmpresaDTO dados) {
         Empresa empresa = buscarUnica();
 
@@ -31,6 +38,12 @@ public class EmpresaService {
         empresa.setEmail(dados.getEmail());
         empresa.setEndereco(dados.getEndereco());
         empresa.setTelefone(dados.getTelefone());
+        // Fase 2 — contexto contabilístico, ver nota FACTO/CONTEXTO em Empresa.
+        empresa.setAtividadeEconomica(dados.getAtividadeEconomica());
+        empresa.setNaturezaNegocio(dados.getNaturezaNegocio());
+        empresa.setMoeda(dados.getMoeda());
+        empresa.setExercicioAtualInicio(dados.getExercicioAtualInicio());
+        empresa.setExercicioAtualFim(dados.getExercicioAtualFim());
 
         return converterParaDTO(empresaRepository.save(empresa));
     }
@@ -48,7 +61,12 @@ public class EmpresaService {
                 empresa.getNif(),
                 empresa.getEmail(),
                 empresa.getEndereco(),
-                empresa.getTelefone()
+                empresa.getTelefone(),
+                empresa.getAtividadeEconomica(),
+                empresa.getNaturezaNegocio(),
+                empresa.getMoeda(),
+                empresa.getExercicioAtualInicio(),
+                empresa.getExercicioAtualFim()
         );
     }
 }

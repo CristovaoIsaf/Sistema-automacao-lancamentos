@@ -17,7 +17,12 @@ import { ExportacaoSAFT } from "./pages/ExportacaoSAFT";
 import { Utilizadores } from "./pages/Utilizadores";
 import { Auditoria } from "./pages/Auditoria";
 import { Layout } from "./components/Layout";
+import { RotaProtegida } from "./auth/RotaProtegida";
 
+// Fase 1 — cada página fica envolvida em <RotaProtegida>, que consulta
+// PERFIS_POR_ROTA (auth/permissoesRotas.ts) e bloqueia a navegação se o
+// perfil autenticado não tiver acesso àquela rota — não é só o menu a
+// esconder o link (ver Layout.tsx).
 export const router = createBrowserRouter([
   {
     path: "/login",
@@ -31,21 +36,21 @@ export const router = createBrowserRouter([
     path: "/",
     Component: Layout,
     children: [
-      { index: true, Component: Dashboard },
-      { path: "upload-documentos", Component: UploadDocumentos },
-      { path: "documentos", Component: Arquivo },
-      { path: "classificacao", Component: ClassificacaoContabilistica },
-      { path: "lancamentos", Component: Lancamentos },
-      { path: "lancamento-diario", Component: LancamentoDiario },
-      { path: "balancetes", Component: Balancetes },
-      { path: "plano-contas", Component: PlanoContas },
-      { path: "livros-fiscais", Component: LivrosFiscais },
-      { path: "saft", Component: ExportacaoSAFT },
-      { path: "relatorios", Component: Relatorios },
-      { path: "ia-categorizacao", Component: IACategorizacao },
-      { path: "utilizadores", Component: Utilizadores },
-      { path: "auditoria", Component: Auditoria },
-      { path: "configuracoes", Component: Configuracoes },
+      { index: true, element: <RotaProtegida><Dashboard /></RotaProtegida> },
+      { path: "upload-documentos", element: <RotaProtegida><UploadDocumentos /></RotaProtegida> },
+      { path: "documentos", element: <RotaProtegida><Arquivo /></RotaProtegida> },
+      { path: "classificacao", element: <RotaProtegida><ClassificacaoContabilistica /></RotaProtegida> },
+      { path: "lancamentos", element: <RotaProtegida><Lancamentos /></RotaProtegida> },
+      { path: "lancamento-diario", element: <RotaProtegida><LancamentoDiario /></RotaProtegida> },
+      { path: "balancetes", element: <RotaProtegida><Balancetes /></RotaProtegida> },
+      { path: "plano-contas", element: <RotaProtegida><PlanoContas /></RotaProtegida> },
+      { path: "livros-fiscais", element: <RotaProtegida><LivrosFiscais /></RotaProtegida> },
+      { path: "saft", element: <RotaProtegida><ExportacaoSAFT /></RotaProtegida> },
+      { path: "relatorios", element: <RotaProtegida><Relatorios /></RotaProtegida> },
+      { path: "ia-categorizacao", element: <RotaProtegida><IACategorizacao /></RotaProtegida> },
+      { path: "utilizadores", element: <RotaProtegida><Utilizadores /></RotaProtegida> },
+      { path: "auditoria", element: <RotaProtegida><Auditoria /></RotaProtegida> },
+      { path: "configuracoes", element: <RotaProtegida><Configuracoes /></RotaProtegida> },
     ],
   },
 ]);

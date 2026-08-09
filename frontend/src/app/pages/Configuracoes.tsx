@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Save, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+import { obterEmpresa, atualizarEmpresa } from '../api/empresaApi';
+import type { Empresa } from '../types/empresa';
 
 type Tab = 'geral' | 'integracao' | 'notificacoes' | 'seguranca' | 'api';
 
@@ -24,11 +26,47 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 
+const campoClasse = 'w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all';
+
+function BadgeTipo({ tipo }: { tipo: 'Facto' | 'Contexto' }) {
+  const cor = tipo === 'Facto' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#F5F3FF] text-[#7C3AED]';
+  return <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${cor}`}>{tipo}</span>;
+}
+
 export function Configuracoes() {
   const [activeTab, setActiveTab] = useState<Tab>('geral');
   const [showApiKey, setShowApiKey] = useState(false);
   const [notifs, setNotifs] = useState({ prazos: true, lancamentos: true, erros: true, relatorios: false });
   const [seg, setSeg] = useState({ dual2fa: false, auditoria: true, aprovacaoDual: true });
+
+  // Fase 2 — "Dados da Empresa" era 100% mock (só toast.success ao
+  // "Guardar", sem ligação nenhuma ao backend). Passa a carregar/guardar
+  // via GET/PUT /api/empresa (EmpresaController), incluindo os novos
+  // campos de contexto contabilístico.
+  const [empresa, setEmpresa] = useState<Empresa | null>(null);
+  const [aCarregarEmpresa, setACarregarEmpresa] = useState(true);
+  const [aGuardarEmpresa, setAGuardarEmpresa] = useState(false);
+
+  useEffect(() => {
+    obterEmpresa()
+      .then(setEmpresa)
+      .catch(err => toast.error(err instanceof Error ? err.message : 'Erro ao carregar dados da empresa'))
+      .finally(() => setACarregarEmpresa(false));
+  }, []);
+
+  async function guardarEmpresa() {
+    if (!empresa) return;
+    setAGuardarEmpresa(true);
+    try {
+      const atualizada = await atualizarEmpresa(empresa);
+      setEmpresa(atualizada);
+      toast.success('Dados da empresa guardados');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao guardar dados da empresa');
+    } finally {
+      setAGuardarEmpresa(false);
+    }
+  }
 
   return (
     <div className="max-w-[900px] space-y-4">
@@ -58,31 +96,98 @@ export function Configuracoes() {
           <div className="px-4 py-3 border-b border-[#E2E8F0]">
             <h2 className="text-[13px] font-semibold text-[#0F172A]">Dados da Empresa</h2>
           </div>
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {[
-              { label: 'Nome da Empresa', placeholder: 'Empresa Lda.', mono: false },
-              { label: 'NIF', placeholder: '5000123456LA', mono: true },
-              { label: 'Exercício Fiscal', placeholder: '2026', mono: false },
-              { label: 'Moeda', placeholder: 'AOA — Kwanza Angolano', mono: false },
-              { label: 'Email de Contacto', placeholder: 'contabilidade@empresa.ao', mono: false },
-              { label: 'Telefone', placeholder: '+244 9XX XXX XXX', mono: true },
-            ].map(f => (
-              <div key={f.label}>
-                <label className="block text-[12px] font-medium text-[#475569] mb-1.5">{f.label}</label>
-                <input
-                  type="text"
-                  placeholder={f.placeholder}
-                  className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
-                  style={f.mono ? { fontFamily: 'JetBrains Mono, monospace' } : {}}
-                />
+
+          {aCarregarEmpresa || !empresa ? (
+            <div className="p-4 text-[13px] text-[#94A3B8]">A carregar…</div>
+          ) : (
+            <>
+              <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Nome da Empresa</label>
+                  <input type="text" placeholder="Empresa Lda." value={empresa.nome ?? ''}
+                    onChange={e => setEmpresa({ ...empresa, nome: e.target.value })} className={campoClasse} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-[#475569] mb-1.5">NIF</label>
+                  <input type="text" placeholder="5000123456LA" value={empresa.nif ?? ''}
+                    onChange={e => setEmpresa({ ...empresa, nif: e.target.value })} className={campoClasse}
+                    style={{ fontFamily: 'JetBrains Mono, monospace' }} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Email de Contacto</label>
+                  <input type="text" placeholder="contabilidade@empresa.ao" value={empresa.email ?? ''}
+                    onChange={e => setEmpresa({ ...empresa, email: e.target.value })} className={campoClasse} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Telefone</label>
+                  <input type="text" placeholder="+244 9XX XXX XXX" value={empresa.telefone ?? ''}
+                    onChange={e => setEmpresa({ ...empresa, telefone: e.target.value })} className={campoClasse}
+                    style={{ fontFamily: 'JetBrains Mono, monospace' }} />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Morada</label>
+                  <input type="text" placeholder="Rua..., Luanda, Angola" value={empresa.endereco ?? ''}
+                    onChange={e => setEmpresa({ ...empresa, endereco: e.target.value })} className={campoClasse} />
+                </div>
               </div>
-            ))}
-          </div>
-          <div className="px-4 py-3 border-t border-[#E2E8F0]">
-            <button onClick={() => toast.success('Configurações guardadas')} className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[13px] font-medium rounded-md transition-colors">
-              <Save style={{ width: 13, height: 13 }} /> Guardar
-            </button>
-          </div>
+
+              {/* Fase 2 — contexto contabilístico da empresa: distinção
+                  Facto/Contexto explícita na UI (nunca preenchido pela IA,
+                  ver model/Empresa.java do backend). */}
+              <div className="px-4 py-3 border-t border-[#E2E8F0]">
+                <h3 className="text-[12px] font-semibold text-[#0F172A] mb-0.5">Contexto Contabilístico</h3>
+                <p className="text-[11px] text-[#94A3B8] mb-3">
+                  Usado para desambiguar classificações automáticas (ex: uma viatura é mercadoria para um stand automóvel, mas ativo para uma construtora). Preenchido só por um Administrador — nunca inferido pela IA.
+                </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#475569] mb-1.5">
+                      Atividade Económica <BadgeTipo tipo="Contexto" />
+                    </label>
+                    <input type="text" placeholder="Ex: Comércio a retalho de veículos automóveis"
+                      value={empresa.atividadeEconomica ?? ''}
+                      onChange={e => setEmpresa({ ...empresa, atividadeEconomica: e.target.value })} className={campoClasse} />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#475569] mb-1.5">
+                      Natureza do Negócio <BadgeTipo tipo="Contexto" />
+                    </label>
+                    <input type="text" placeholder="Ex: Revenda de mercadorias"
+                      value={empresa.naturezaNegocio ?? ''}
+                      onChange={e => setEmpresa({ ...empresa, naturezaNegocio: e.target.value })} className={campoClasse} />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#475569] mb-1.5">
+                      Moeda <BadgeTipo tipo="Facto" />
+                    </label>
+                    <input type="text" placeholder="AOA" value={empresa.moeda ?? ''}
+                      onChange={e => setEmpresa({ ...empresa, moeda: e.target.value })} className={campoClasse} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#475569] mb-1.5">
+                        Início do Exercício <BadgeTipo tipo="Facto" />
+                      </label>
+                      <input type="date" value={empresa.exercicioAtualInicio ?? ''}
+                        onChange={e => setEmpresa({ ...empresa, exercicioAtualInicio: e.target.value })} className={campoClasse} />
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Fim do Exercício</label>
+                      <input type="date" value={empresa.exercicioAtualFim ?? ''}
+                        onChange={e => setEmpresa({ ...empresa, exercicioAtualFim: e.target.value })} className={campoClasse} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-t border-[#E2E8F0]">
+                <button onClick={guardarEmpresa} disabled={aGuardarEmpresa}
+                  className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 text-white text-[13px] font-medium rounded-md transition-colors">
+                  <Save style={{ width: 13, height: 13 }} /> {aGuardarEmpresa ? 'A guardar…' : 'Guardar'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

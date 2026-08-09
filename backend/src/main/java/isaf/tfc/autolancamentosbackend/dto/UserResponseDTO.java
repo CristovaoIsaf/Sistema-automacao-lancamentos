@@ -25,4 +25,8 @@ public class UserResponseDTO {
     private String status;
 
     private Role papel;
+
+    // Fase 1 — utilizador pertence ao contexto da empresa da instalação
+    // (ver User.empresaId). Sempre a mesma empresa neste TFC (single-tenant).
+    private Long empresaId;
 }

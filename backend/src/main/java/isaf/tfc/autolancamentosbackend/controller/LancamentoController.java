@@ -17,6 +17,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
@@ -35,6 +36,14 @@ public class LancamentoController {
     private final LancamentoService service;
 
 
+    // Fase 1 do plano de 20 fases — escrita de lançamentos manuais é um
+    // acto de Contabilista (RN002/RN010, já aplicado no frontend em
+    // AuthContext.permissoes().podeEscreverLancamentos — Administrador
+    // gere o sistema mas não faz lançamentos, Auditor nunca escreve).
+    // Antes desta fase, este endpoint não tinha nenhuma restrição de
+    // papel no backend — a regra só existia como esconder/desabilitar
+    // botões no frontend, contornável por chamar a API directamente.
+    @PreAuthorize("hasRole('CONTABILISTA')")
     @PostMapping
     public ResponseEntity<LancamentoResponseDTO> criar(
             @RequestBody LancamentoRequestDTO request
@@ -71,6 +80,7 @@ public class LancamentoController {
     /**
      * Atualiza um lançamento ainda não cancelado (usado pelo botão "Editar").
      */
+    @PreAuthorize("hasRole('CONTABILISTA')")
     @PutMapping("/{id}")
     public ResponseEntity<LancamentoResponseDTO> atualizar(
             @PathVariable Long id,
@@ -83,6 +93,7 @@ public class LancamentoController {
     /**
      * Cancela um lançamento (não apaga — mantém rasto para auditoria).
      */
+    @PreAuthorize("hasRole('CONTABILISTA')")
     @PostMapping("/{id}/cancelar")
     public ResponseEntity<Void> cancelar(@PathVariable Long id) {
         service.cancelar(id);

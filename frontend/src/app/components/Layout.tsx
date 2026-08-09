@@ -24,53 +24,53 @@ import {
 import { useState } from 'react';
 import type { Perfil } from '../types/contabilidade';
 import { useAuth } from '../auth/AuthContext';
+import { PERFIS_POR_ROTA } from '../auth/permissoesRotas';
 
-// Cada item declara que perfis o podem ver (RBAC no menu).
-// TODOS = os 3 perfis. Escrita (documentos, lançamento diário) fica fora do Auditor (RN010).
-const TODOS: Perfil[] = ['ADMINISTRADOR', 'CONTABILISTA', 'AUDITOR'];
-
+// Fase 1 — os perfis de cada item vêm de PERFIS_POR_ROTA (auth/permissoesRotas.ts),
+// a mesma tabela usada por RotaProtegida.tsx para bloquear a navegação
+// directa por URL. Antes, esta lista de perfis estava duplicada aqui e não
+// tinha nenhuma verificação correspondente ao nível da rota.
 type MenuItem = {
   path: string;
   label: string;
   icon: React.ElementType;
   badge?: number;
-  perfis: Perfil[];
 };
 
 const menuSections: { label: string; items: MenuItem[] }[] = [
   {
     label: 'PRINCIPAL',
     items: [
-      { path: '/', label: 'Dashboard', icon: LayoutDashboard, perfis: TODOS },
+      { path: '/', label: 'Dashboard', icon: LayoutDashboard },
       // Importar documentos e um acto de Contabilista (UC004)
-      { path: '/upload-documentos', label: 'Novo Documento', icon: Upload, perfis: ['ADMINISTRADOR', 'CONTABILISTA'] },
+      { path: '/upload-documentos', label: 'Novo Documento', icon: Upload },
       // Arquivo organizado por entidade — só leitura, por isso o Auditor
       // também acede (RN010 só exclui a escrita de documentos ao Auditor).
-      { path: '/documentos', label: 'Documentos', icon: FolderOpen, perfis: TODOS },
-      { path: '/lancamentos', label: 'Lançamentos', icon: FileText, perfis: TODOS },
+      { path: '/documentos', label: 'Documentos', icon: FolderOpen },
+      { path: '/lancamentos', label: 'Lançamentos', icon: FileText },
       // Registo manual de partidas dobradas — acto de escrita, mesma regra
       // de perfis que "Novo Documento" (RN010: Auditor não escreve).
-      { path: '/lancamento-diario', label: 'Lançamento Manual', icon: NotebookPen, perfis: ['ADMINISTRADOR', 'CONTABILISTA'] },
-      { path: '/balancetes', label: 'Balancetes', icon: Scale, perfis: TODOS },
-      { path: '/relatorios', label: 'Relatórios', icon: BarChart3, perfis: TODOS },
+      { path: '/lancamento-diario', label: 'Lançamento Manual', icon: NotebookPen },
+      { path: '/balancetes', label: 'Balancetes', icon: Scale },
+      { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
       // Consulta de logs de auditoria (UC010) — Administrador e Auditor
-      { path: '/auditoria', label: 'Auditoria', icon: ScrollText, perfis: ['ADMINISTRADOR', 'AUDITOR'] },
+      { path: '/auditoria', label: 'Auditoria', icon: ScrollText },
     ],
   },
   {
     label: 'FISCAL',
     items: [
-      { path: '/livros-fiscais', label: 'Livros Fiscais', icon: BookOpen, perfis: TODOS },
-      { path: '/saft', label: 'Exportação SAF-T', icon: FileCode, perfis: ['ADMINISTRADOR', 'CONTABILISTA'] },
-      { path: '/ia-categorizacao', label: 'IA Categorização', icon: Brain, badge: 7, perfis: ['ADMINISTRADOR', 'CONTABILISTA'] },
+      { path: '/livros-fiscais', label: 'Livros Fiscais', icon: BookOpen },
+      { path: '/saft', label: 'Exportação SAF-T', icon: FileCode },
+      { path: '/ia-categorizacao', label: 'IA Categorização', icon: Brain, badge: 7 },
     ],
   },
   {
     label: 'ADMINISTRADOR',
     items: [
-      { path: '/plano-contas', label: 'Plano de Contas', icon: BookOpen, perfis: ['ADMINISTRADOR'] },
-      { path: '/utilizadores', label: 'Utilizadores', icon: Users, perfis: ['ADMINISTRADOR'] },
-      { path: '/configuracoes', label: 'Configurações', icon: Settings, perfis: ['ADMINISTRADOR'] },
+      { path: '/plano-contas', label: 'Plano de Contas', icon: BookOpen },
+      { path: '/utilizadores', label: 'Utilizadores', icon: Users },
+      { path: '/configuracoes', label: 'Configurações', icon: Settings },
     ],
   },
 ];
@@ -94,7 +94,7 @@ export function Layout() {
 
   // RBAC: mostra só as secções/itens permitidos ao perfil activo, e secções vazias somem
   const seccoesVisiveis = menuSections
-    .map(s => ({ ...s, items: s.items.filter(i => i.perfis.includes(perfil)) }))
+    .map(s => ({ ...s, items: s.items.filter(i => (PERFIS_POR_ROTA[i.path] ?? []).includes(perfil)) }))
     .filter(s => s.items.length > 0);
 
   const activeLabel = seccoesVisiveis

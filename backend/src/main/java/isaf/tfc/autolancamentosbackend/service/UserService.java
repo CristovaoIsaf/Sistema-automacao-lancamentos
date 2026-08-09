@@ -20,10 +20,12 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmpresaService empresaService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmpresaService empresaService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.empresaService = empresaService;
     }
 
     public List<UserResponseDTO> listar() {
@@ -44,6 +46,9 @@ public class UserService {
         user.setPapel(dados.getPapel());
         user.setStatus("ATIVO");
         user.setSenha(passwordEncoder.encode(dados.getSenha()));
+        // Fase 1 — utilizador pertence ao contexto da empresa da instalação
+        // (single-tenant: sempre a única empresa já semeada).
+        user.setEmpresaId(empresaService.idDaEmpresaUnica());
 
         return converterParaDTO(userRepository.save(user));
     }
@@ -79,7 +84,8 @@ public class UserService {
                 user.getEmail(),
                 user.getNif(),
                 user.getStatus(),
-                user.getPapel()
+                user.getPapel(),
+                user.getEmpresaId()
         );
     }
 }
