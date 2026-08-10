@@ -7,6 +7,7 @@ import { LancamentoDiario } from "./pages/LancamentoDiario";
 import { PlanoContas } from "./pages/PlanoContas";
 import { LivrosFiscais } from "./pages/LivrosFiscais";
 import { Relatorios } from "./pages/Relatorios";
+import { NotasContas } from "./pages/NotasContas";
 import { IACategorizacao } from "./pages/IACategorizacao";
 import { Configuracoes } from "./pages/Configuracoes";
 import { UploadDocumentos } from "./pages/UploadDocumentos";
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: "livros-fiscais", element: <RotaProtegida><LivrosFiscais /></RotaProtegida> },
       { path: "saft", element: <RotaProtegida><ExportacaoSAFT /></RotaProtegida> },
       { path: "relatorios", element: <RotaProtegida><Relatorios /></RotaProtegida> },
+      { path: "notas-contas", element: <RotaProtegida><NotasContas /></RotaProtegida> },
       { path: "ia-categorizacao", element: <RotaProtegida><IACategorizacao /></RotaProtegida> },
       { path: "utilizadores", element: <RotaProtegida><Utilizadores /></RotaProtegida> },
       { path: "auditoria", element: <RotaProtegida><Auditoria /></RotaProtegida> },

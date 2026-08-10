@@ -11,6 +11,7 @@ from services.metricas import metricas
 from services.ocr_service import OCRService
 from services.document_analyzer import DocumentAnalyzer
 from services import entity_profile
+from services import nota_redacao
 from services import pgc as pgc_ao
 
 app = FastAPI(
@@ -72,6 +73,16 @@ def perfil_entidade(nif: str):
     endpoint expõe-o para o dossiê da entidade (ver EntidadeController
     no lado Java)."""
     return entity_profile.resumo(nif)
+
+
+@app.post("/notas/redacao")
+@app.post("/api/v1/notas/redacao")
+def notas_redacao(dados: nota_redacao.NotaRedacaoRequest):
+    """Fase 14 do plano de 20 fases — "Notas às Contas": recebe os dados
+    JÁ CALCULADOS de uma nota (ver NotaContaService no lado Java) e
+    devolve um rascunho de texto explicativo — nunca calcula nem inventa
+    valores aqui, só formata/redige (ver services/nota_redacao.py)."""
+    return nota_redacao.redigir(dados)
 
 
 @app.post("/ocr")

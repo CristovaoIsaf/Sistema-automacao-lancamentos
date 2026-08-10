@@ -21,6 +21,7 @@ export const PERFIS_POR_ROTA: Record<string, Perfil[]> = {
   '/livros-fiscais': TODOS,
   '/saft': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/relatorios': TODOS,
+  '/notas-contas': TODOS,
   '/ia-categorizacao': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/plano-contas': ['ADMINISTRADOR'],
   '/utilizadores': ['ADMINISTRADOR'],

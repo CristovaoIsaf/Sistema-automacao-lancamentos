@@ -14,3 +14,4 @@ export * from './utilizadorApi';
 export * from './configuracaoApi';
 export * from './cadastroApi';
 export * from './empresaApi';
+export * from './notaContaApi';

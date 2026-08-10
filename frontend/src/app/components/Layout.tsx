@@ -20,6 +20,7 @@ import {
   ScrollText,
   FolderOpen,
   NotebookPen,
+  FileSignature,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { Perfil } from '../types/contabilidade';
@@ -53,6 +54,7 @@ const menuSections: { label: string; items: MenuItem[] }[] = [
       { path: '/lancamento-diario', label: 'Lançamento Manual', icon: NotebookPen },
       { path: '/balancetes', label: 'Balancetes', icon: Scale },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+      { path: '/notas-contas', label: 'Notas às Contas', icon: FileSignature },
       // Consulta de logs de auditoria (UC010) — Administrador e Auditor
       { path: '/auditoria', label: 'Auditoria', icon: ScrollText },
     ],

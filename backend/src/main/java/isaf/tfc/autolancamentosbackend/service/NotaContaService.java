@@ -1,5 +1,6 @@
 package isaf.tfc.autolancamentosbackend.service;
 
+import isaf.tfc.autolancamentosbackend.dto.ContaDTO;
 import isaf.tfc.autolancamentosbackend.dto.GrupoEntidadeDTO;
 import isaf.tfc.autolancamentosbackend.dto.MovimentoContaDTO;
 import isaf.tfc.autolancamentosbackend.dto.NotaContaResponseDTO;
@@ -42,15 +43,18 @@ public class NotaContaService {
     private final SugestaoRepository sugestaoRepository;
     private final DocumentoRepository documentoRepository;
     private final EntidadeRepository entidadeRepository;
+    private final PlanoContasClient planoContasClient;
 
     public NotaContaService(LancamentoRepository lancamentoRepository,
                              SugestaoRepository sugestaoRepository,
                              DocumentoRepository documentoRepository,
-                             EntidadeRepository entidadeRepository) {
+                             EntidadeRepository entidadeRepository,
+                             PlanoContasClient planoContasClient) {
         this.lancamentoRepository = lancamentoRepository;
         this.sugestaoRepository = sugestaoRepository;
         this.documentoRepository = documentoRepository;
         this.entidadeRepository = entidadeRepository;
+        this.planoContasClient = planoContasClient;
     }
 
     public NotaContaResponseDTO obterNota(String conta, LocalDate inicio, LocalDate fim) {
@@ -120,7 +124,16 @@ public class NotaContaService {
             totalCredito = totalCredito.add(subCredito);
         }
 
-        return new NotaContaResponseDTO(conta, inicio, fim, grupos, totalDebito, totalCredito, totalDebito.subtract(totalCredito));
+        ContaDTO contaInfo = planoContasClient.listar().stream()
+                .filter(c -> c.getCodigo().equals(conta))
+                .findFirst()
+                .orElse(null);
+
+        return new NotaContaResponseDTO(
+                conta,
+                contaInfo != null ? contaInfo.getNome() : null,
+                contaInfo != null ? contaInfo.getNatureza() : null,
+                inicio, fim, grupos, totalDebito, totalCredito, totalDebito.subtract(totalCredito));
     }
 
     private boolean contaCorresponde(String contaLinha, String contaConsultada) {
