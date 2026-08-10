@@ -1,85 +1,33 @@
-export interface LinhaDRE {
-  conta: string;
-  codigo: string;
-  descricao: string;
-  valorAtual: number;
-  valorAnterior: number;
-}
+// Fase 13 do plano de 20 fases — espelham DREResponseDTO/BalancoResponseDTO
+// (backend, ver DemonstracoesFinanceirasService) exatamente como devolvidos
+// pela API; substituem tipos antigos (SecaoDRE/SecaoBalanco com
+// valorAtual/valorAnterior) que nunca tiveram nenhum backend real a
+// suportá-los.
 
-export interface SecaoDRE {
-  titulo: string;
-  linhas: LinhaDRE[];
-  subtotal: number;
+export interface LinhaDemonstracao {
+  conta: string;
+  nome: string;
+  valor: number;
 }
 
 export interface RelatorioDRE {
-  periodo: string;
-  sec: SecaoDRE[];
+  inicio?: string | null;
+  fim?: string | null;
+  receitas: LinhaDemonstracao[];
+  totalReceitas: number;
+  gastos: LinhaDemonstracao[];
+  totalGastos: number;
   resultadoLiquido: number;
 }
 
-export interface LinhaBalanco {
-  conta: string;
-  codigo: string;
-  descricao: string;
-  valorAtual: number;
-  valorAnterior: number;
-}
-
-export interface SecaoBalanco {
-  titulo: string;
-  linhas: LinhaBalanco[];
-  subtotal: number;
-}
-
 export interface RelatorioBalanco {
-  periodo: string;
-  ativo: SecaoBalanco[];
-  passivo: SecaoBalanco[];
-  patrimonioLiquido: SecaoBalanco[];
-}
-
-export interface ItemRelatorioBalancete {
-  conta: string;
-  codigo: string;
-  nome: string;
-  debito: number;
-  credito: number;
-  saldoDevedor: number;
-  saldoCredor: number;
-}
-
-export interface RelatorioBalancete {
-  periodo: string;
-  itens: ItemRelatorioBalancete[];
-  totalDebito: number;
-  totalCredito: number;
-}
-
-export interface ItemLivroRazao {
-  data: string;
-  documento: string;
-  historico: string;
- debito: number;
-  credito: number;
-  saldo: number;
-}
-
-export interface RelatorioRazao {
-  conta: string;
-  nomeConta: string;
-  periodo: string;
-  itens: ItemLivroRazao[];
-  saldoFinal: number;
-}
-
-export type FormatoExportacao = 'PDF' | 'EXCEL' | 'CSV';
-export type TipoRelatorio = 'dre' | 'balanco' | 'balancete' | 'razao';
-
-export interface ExportarRelatorioParams {
-  formato: FormatoExportacao;
-  tipo: TipoRelatorio;
-  periodo: string;
-  inicio?: string;
-  fim?: string;
+  inicio?: string | null;
+  fim?: string | null;
+  ativo: LinhaDemonstracao[];
+  totalAtivo: number;
+  passivo: LinhaDemonstracao[];
+  totalPassivo: number;
+  // totalAtivo - totalPassivo — este PGC-AO reduzido não modela Património
+  // Líquido, por isso não fecha necessariamente a zero (ver backend).
+  diferenca: number;
 }

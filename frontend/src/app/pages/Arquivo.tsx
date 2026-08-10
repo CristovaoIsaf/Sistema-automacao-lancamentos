@@ -350,6 +350,35 @@ export function Arquivo() {
                     </div>
                   </div>
 
+                  {/* Fase 12 do plano de 20 fases — "Perfil de Entidade":
+                      conhecimento acumulado sobre o comportamento habitual
+                      desta entidade, já usado internamente para poupar
+                      chamadas de IA, agora também visível aqui. Omitido
+                      quando ainda não há histórico (nunca inventa dados). */}
+                  {dossie.perfil && dossie.perfil.totalDocumentos > 0 && (
+                    <div className="border-t border-[#E2E8F0] pt-3 space-y-1.5">
+                      <p className="text-[11px] font-medium text-[#94A3B8] uppercase tracking-wide mb-0.5">
+                        Perfil (conhecimento acumulado)
+                      </p>
+                      {dossie.perfil.tipoDominante && (
+                        <p className="text-[12px] text-[#0F172A]">
+                          Tipo habitual: <span className="font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{dossie.perfil.tipoDominante}</span>
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(dossie.perfil.distribuicaoTiposDocumento).map(([tipo, contagem]) => (
+                          <span
+                            key={tipo}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F1F5F9] text-[#475569]"
+                            style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                          >
+                            {tipo} × {contagem}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="border-t border-[#E2E8F0] pt-3 space-y-1.5">
                     {dossie.documentos.length === 0 ? (
                       <p className="text-[12px] text-[#94A3B8]">Nenhum documento arquivado.</p>

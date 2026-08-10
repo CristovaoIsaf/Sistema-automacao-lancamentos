@@ -27,6 +27,17 @@ export interface EntidadeResumo {
   tipo: 'CLIENTE' | 'FORNECEDOR' | 'DESCONHECIDO';
 }
 
+// Espelha PerfilEntidadeDTO (backend) — Fase 12, conhecimento acumulado
+// sobre o comportamento habitual de uma entidade (ver
+// fastapi/app/services/entity_profile.py). Pode vir null no dossiê
+// quando o FastAPI está indisponível ou ainda não há histórico.
+export interface PerfilEntidade {
+  nif: string;
+  totalDocumentos: number;
+  tipoDominante: string | null;
+  distribuicaoTiposDocumento: Record<string, number>;
+}
+
 // Espelha EntidadeDossieDTO (backend) — GET /api/entidades/{id}.
 export interface EntidadeDossie {
   id: number;
@@ -34,6 +45,7 @@ export interface EntidadeDossie {
   nif: string;
   tipo: 'CLIENTE' | 'FORNECEDOR' | 'DESCONHECIDO';
   documentos: Documento[];
+  perfil?: PerfilEntidade | null;
 }
 
 export interface UploadDocumentoResponse {

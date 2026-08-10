@@ -10,6 +10,7 @@ from services.document_fingerprint import calcular_fingerprint
 from services.metricas import metricas
 from services.ocr_service import OCRService
 from services.document_analyzer import DocumentAnalyzer
+from services import entity_profile
 from services import pgc as pgc_ao
 
 app = FastAPI(
@@ -59,6 +60,18 @@ def pgc_contas():
     82/01, ver services/pgc.py), fonte única consumida pelo backend Java
     (PlanoContasClient) em vez de uma cópia hardcoded lá."""
     return pgc_ao.plano_de_contas()
+
+
+@app.get("/perfil-entidade/{nif}")
+@app.get("/api/v1/perfil-entidade/{nif}")
+def perfil_entidade(nif: str):
+    """Fase 12 do plano de 20 fases — "Perfil de Entidade": o
+    conhecimento acumulado por entity_profile.py (ver
+    document_analyzer.py._classificar_por_perfil_entidade) já existia,
+    mas só era usado internamente para poupar chamadas de IA. Este
+    endpoint expõe-o para o dossiê da entidade (ver EntidadeController
+    no lado Java)."""
+    return entity_profile.resumo(nif)
 
 
 @app.post("/ocr")

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, CheckCircle2, AlertCircle, Calendar, Loader2 } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
+import { intervaloDoPeriodo } from '../data/periodo';
 import { obterBalancete } from '../api/balanceteApi';
 import type { BalanceteResponse } from '../types/balancete';
 
@@ -128,24 +129,3 @@ export function Balancetes() {
   );
 }
 
-function intervaloDoPeriodo(periodo: string): { inicio?: string; fim?: string } {
-  const hoje = new Date();
-  const fim = hoje.toISOString().slice(0, 10);
-
-  switch (periodo) {
-    case 'mes-atual': {
-      const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
-      return { inicio, fim };
-    }
-    case 'trimestre': {
-      const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1).toISOString().slice(0, 10);
-      return { inicio, fim };
-    }
-    case 'ano': {
-      const inicio = new Date(hoje.getFullYear(), 0, 1).toISOString().slice(0, 10);
-      return { inicio, fim };
-    }
-    default:
-      return {};
-  }
-}

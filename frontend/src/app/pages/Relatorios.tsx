@@ -1,27 +1,60 @@
 import { useEffect, useState } from 'react';
-import { Download, BarChart3, BookOpen, FileText, Scale } from 'lucide-react';
-import { formatarKwanza, dadosGraficoMensal } from '../data/mockData';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
+import { BarChart3, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { formatarKwanza } from '../data/mockData';
+import { intervaloDoPeriodo } from '../data/periodo';
+import { obterDRE, obterBalanco } from '../api/relatorioApi';
+import type { RelatorioDRE, RelatorioBalanco } from '../types/relatorio';
 
-type TabKey = 'balancete' | 'razao' | 'dre' | 'balanco';
+// Fase 13 do plano de 20 fases — "garantir consistência entre lançamentos
+// → balancete → balanço → DRE... não criar cálculos independentes no
+// frontend": antes desta fase, esta página mostrava uma DRE com números
+// 100% inventados no componente, e as abas Balancete/Balanço/Razão
+// diziam sempre "em preparação". Balancete já tem a sua própria página
+// dedicada (/balancetes, ver Balancetes.tsx) — não duplicada aqui.
+// Livro Razão nunca teve nenhum endpoint real a suportá-lo nem estava
+// ligado à navegação — fica fora do âmbito desta fase (ver relatório).
+type TabKey = 'dre' | 'balanco';
 
 const tabs: { key: TabKey; label: string; icon: React.ElementType }[] = [
-  { key: 'balancete', label: 'Balancete', icon: Scale },
-  { key: 'razao',     label: 'Livro Razão', icon: BookOpen },
-  { key: 'dre',       label: 'DRE', icon: BarChart3 },
-  { key: 'balanco',   label: 'Balanço', icon: FileText },
+  { key: 'dre',     label: 'DRE', icon: BarChart3 },
+  { key: 'balanco', label: 'Balanço', icon: FileText },
 ];
-
-const dreData = dadosGraficoMensal.slice(-6).map(d => ({
-  mes: d.mes,
-  receitas: d.receitas,
-  despesas: d.despesas,
-  resultado: d.receitas - d.despesas,
-}));
 
 export function Relatorios() {
   const [activeTab, setActiveTab] = useState<TabKey>('dre');
   const [periodo, setPeriodo] = useState('mes-atual');
+
+  const [dre, setDre] = useState<RelatorioDRE | null>(null);
+  const [balanco, setBalanco] = useState<RelatorioBalanco | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    setLoading(true);
+    setErro(null);
+
+    const { inicio, fim } = intervaloDoPeriodo(periodo);
+
+    Promise.all([obterDRE(inicio, fim), obterBalanco(inicio, fim)])
+      .then(([dadosDre, dadosBalanco]) => {
+        if (cancelado) return;
+        setDre(dadosDre);
+        setBalanco(dadosBalanco);
+      })
+      .catch((e) => {
+        if (cancelado) return;
+        console.error('Erro ao carregar demonstrações financeiras:', e);
+        setErro('Não foi possível carregar as demonstrações financeiras.');
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [periodo]);
 
   return (
     <div className="max-w-[1200px] space-y-4">
@@ -30,9 +63,6 @@ export function Relatorios() {
           <h1 className="text-[18px] font-semibold text-[#0F172A]">Relatórios Financeiros</h1>
           <p className="text-[13px] text-[#475569] mt-0.5">PGCA · Decreto n.º 82/01</p>
         </div>
-        <button className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors">
-          <Download style={{ width: 13, height: 13 }} /> Exportar PDF
-        </button>
       </div>
 
       {/* Period + Tab bar */}
@@ -69,15 +99,21 @@ export function Relatorios() {
         </div>
       </div>
 
-      {/* Content */}
-      {activeTab === 'dre' && (
+      {loading ? (
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-8 flex items-center justify-center gap-2 text-[13px] text-[#94A3B8]">
+          <Loader2 className="animate-spin" size={16} /> A carregar...
+        </div>
+      ) : erro ? (
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-8 flex items-center justify-center gap-2 text-[13px] text-[#DC2626]">
+          <AlertCircle size={16} /> {erro}
+        </div>
+      ) : activeTab === 'dre' && dre ? (
         <div className="space-y-4">
-          {/* DRE summary */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Receitas Totais', value: 4529000, color: 'text-[#059669]' },
-              { label: 'Despesas Totais', value: 3600000, color: 'text-[#DC2626]' },
-              { label: 'Resultado Líquido', value: 929000, color: 'text-[#2563EB]' },
+              { label: 'Receitas Totais', value: dre.totalReceitas, color: 'text-[#059669]' },
+              { label: 'Gastos Totais', value: dre.totalGastos, color: 'text-[#DC2626]' },
+              { label: 'Resultado Líquido', value: dre.resultadoLiquido, color: dre.resultadoLiquido >= 0 ? 'text-[#2563EB]' : 'text-[#DC2626]' },
             ].map(kpi => (
               <div key={kpi.label} className="bg-white border border-[#E2E8F0] rounded-lg p-4">
                 <p className="text-[12px] font-medium text-[#475569] mb-2">{kpi.label}</p>
@@ -88,73 +124,112 @@ export function Relatorios() {
             ))}
           </div>
 
-          {/* Chart */}
-          <div className="bg-white border border-[#E2E8F0] rounded-lg p-4">
-            <h2 className="text-[13px] font-semibold text-[#0F172A] mb-4">Evolução — Receitas vs Despesas vs Resultado</h2>
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={dreData} margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => `${(v / 1000000).toFixed(0)}M`} tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: number) => formatarKwanza(v)} contentStyle={{ fontSize: 12, border: '1px solid #E2E8F0', borderRadius: 6, boxShadow: 'none' }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="receitas" stroke="#059669" strokeWidth={1.5} dot={false} name="Receitas" />
-                <Line type="monotone" dataKey="despesas" stroke="#DC2626" strokeWidth={1.5} dot={false} name="Despesas" />
-                <Line type="monotone" dataKey="resultado" stroke="#2563EB" strokeWidth={1.5} dot={false} name="Resultado" strokeDasharray="4 2" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* DRE Table */}
           <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E2E8F0]">
               <h2 className="text-[13px] font-semibold text-[#0F172A]">Demonstração de Resultados por Exercício</h2>
+              <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                Compras (21) tratadas como gasto do período — este sistema não modela existências/CMVC.
+              </p>
             </div>
             <table className="w-full">
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium text-[#475569] uppercase tracking-wide">Rubrica</th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-medium text-[#475569] uppercase tracking-wide">Mês Actual</th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-medium text-[#475569] uppercase tracking-wide">Acumulado</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium text-[#475569] uppercase tracking-wide">Conta</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-medium text-[#475569] uppercase tracking-wide">Valor</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { rubrica: 'Vendas de Mercadorias', mes: 1029000, acum: 4200000, type: 'receita' },
-                  { rubrica: 'Prestação de Serviços', mes: 0, acum: 329000, type: 'receita' },
-                  { rubrica: 'TOTAL RECEITAS', mes: 1029000, acum: 4529000, type: 'subtotal' },
-                  { rubrica: 'Custo das Mercadorias', mes: 600000, acum: 2400000, type: 'despesa' },
-                  { rubrica: 'Salários e Ordenados', mes: 300000, acum: 900000, type: 'despesa' },
-                  { rubrica: 'Outros gastos', mes: 100000, acum: 300000, type: 'despesa' },
-                  { rubrica: 'TOTAL DESPESAS', mes: 1000000, acum: 3600000, type: 'subtotal' },
-                  { rubrica: 'RESULTADO LÍQUIDO', mes: 29000, acum: 929000, type: 'total' },
-                ].map(row => (
-                  <tr key={row.rubrica} className={`border-b ${row.type === 'total' ? 'bg-[#EFF6FF] border-[#BFDBFE]' : row.type === 'subtotal' ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'border-[#F1F5F9] hover:bg-[#F8FAFC]'} transition-colors`}>
-                    <td className={`px-4 py-2.5 text-[13px] ${row.type === 'total' || row.type === 'subtotal' ? 'font-semibold text-[#0F172A]' : 'text-[#475569]'} ${row.type !== 'subtotal' && row.type !== 'total' ? 'pl-8' : ''}`}>{row.rubrica}</td>
-                    <td className={`px-4 py-2.5 text-[13px] text-right ${row.type === 'total' ? 'text-[#2563EB] font-semibold' : row.type === 'subtotal' ? 'font-semibold text-[#0F172A]' : row.type === 'receita' ? 'text-[#059669]' : 'text-[#DC2626]'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                      {row.mes ? formatarKwanza(row.mes) : '—'}
-                    </td>
-                    <td className={`px-4 py-2.5 text-[13px] text-right ${row.type === 'total' ? 'text-[#2563EB] font-semibold' : row.type === 'subtotal' ? 'font-semibold text-[#0F172A]' : row.type === 'receita' ? 'text-[#059669]' : 'text-[#DC2626]'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                      {formatarKwanza(row.acum)}
+                {dre.receitas.length === 0 && dre.gastos.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                      Nenhum movimento no período seleccionado.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  <>
+                    {dre.receitas.map(l => (
+                      <tr key={l.conta} className="border-b border-[#F1F5F9]">
+                        <td className="px-4 py-2.5 text-[13px] text-[#475569] pl-8">{l.conta} — {l.nome}</td>
+                        <td className="px-4 py-2.5 text-[13px] text-right text-[#059669]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(l.valor)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                      <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">TOTAL RECEITAS</td>
+                      <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(dre.totalReceitas)}</td>
+                    </tr>
+                    {dre.gastos.map(l => (
+                      <tr key={l.conta} className="border-b border-[#F1F5F9]">
+                        <td className="px-4 py-2.5 text-[13px] text-[#475569] pl-8">{l.conta} — {l.nome}</td>
+                        <td className="px-4 py-2.5 text-[13px] text-right text-[#DC2626]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(l.valor)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                      <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">TOTAL GASTOS</td>
+                      <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(dre.totalGastos)}</td>
+                    </tr>
+                    <tr className="bg-[#EFF6FF] border-[#BFDBFE]">
+                      <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">RESULTADO LÍQUIDO</td>
+                      <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#2563EB]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(dre.resultadoLiquido)}</td>
+                    </tr>
+                  </>
+                )}
               </tbody>
             </table>
           </div>
         </div>
-      )}
+      ) : activeTab === 'balanco' && balanco ? (
+        <div className="space-y-4">
+          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-2.5 text-[12px] text-[#92400E]">
+            Este balanço mostra só contas de Terceiros e Meios monetários (Clientes, Fornecedores, Caixa, Depósitos, IVA) — o plano de contas deste sistema (Decreto 82/01, âmbito reduzido do TFC) não modela Ativo Não Corrente nem Capital Próprio/Património Líquido, por isso Ativo e Passivo não fecham necessariamente ao mesmo valor.
+          </div>
 
-      {activeTab !== 'dre' && (
-        <div className="bg-white border border-[#E2E8F0] rounded-lg flex items-center justify-center py-16">
-          <div className="text-center">
-            <p className="text-[14px] text-[#475569] font-medium">
-              {tabs.find(t => t.key === activeTab)?.label} em preparação
-            </p>
-            <p className="text-[12px] text-[#94A3B8] mt-1">Seleccione DRE para ver o relatório completo</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#E2E8F0]">
+                <h2 className="text-[13px] font-semibold text-[#0F172A]">Ativo</h2>
+              </div>
+              <table className="w-full">
+                <tbody>
+                  {balanco.ativo.length === 0 ? (
+                    <tr><td className="px-4 py-6 text-center text-[13px] text-[#94A3B8]">Sem movimento</td></tr>
+                  ) : balanco.ativo.map(l => (
+                    <tr key={l.conta} className="border-b border-[#F1F5F9]">
+                      <td className="px-4 py-2.5 text-[13px] text-[#475569]">{l.conta} — {l.nome}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-right text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(l.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-[#F8FAFC]">
+                    <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">TOTAL ATIVO</td>
+                    <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(balanco.totalAtivo)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#E2E8F0]">
+                <h2 className="text-[13px] font-semibold text-[#0F172A]">Passivo</h2>
+              </div>
+              <table className="w-full">
+                <tbody>
+                  {balanco.passivo.length === 0 ? (
+                    <tr><td className="px-4 py-6 text-center text-[13px] text-[#94A3B8]">Sem movimento</td></tr>
+                  ) : balanco.passivo.map(l => (
+                    <tr key={l.conta} className="border-b border-[#F1F5F9]">
+                      <td className="px-4 py-2.5 text-[13px] text-[#475569]">{l.conta} — {l.nome}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-right text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(l.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-[#F8FAFC]">
+                    <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">TOTAL PASSIVO</td>
+                    <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(balanco.totalPassivo)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

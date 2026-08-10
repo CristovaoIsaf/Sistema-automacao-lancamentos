@@ -6,6 +6,7 @@ import isaf.tfc.autolancamentosbackend.model.Entidade;
 import isaf.tfc.autolancamentosbackend.repository.DocumentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.EntidadeRepository;
 import isaf.tfc.autolancamentosbackend.service.DocumentoEnriquecimentoService;
+import isaf.tfc.autolancamentosbackend.service.PerfilEntidadeClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,13 +30,16 @@ public class EntidadeController {
     private final EntidadeRepository entidadeRepository;
     private final DocumentoRepository documentoRepository;
     private final DocumentoEnriquecimentoService enriquecimentoService;
+    private final PerfilEntidadeClient perfilEntidadeClient;
 
     public EntidadeController(EntidadeRepository entidadeRepository,
                                DocumentoRepository documentoRepository,
-                               DocumentoEnriquecimentoService enriquecimentoService) {
+                               DocumentoEnriquecimentoService enriquecimentoService,
+                               PerfilEntidadeClient perfilEntidadeClient) {
         this.entidadeRepository = entidadeRepository;
         this.documentoRepository = documentoRepository;
         this.enriquecimentoService = enriquecimentoService;
+        this.perfilEntidadeClient = perfilEntidadeClient;
     }
 
     @GetMapping
@@ -68,7 +72,8 @@ public class EntidadeController {
                 entidade.getNome(),
                 entidade.getNif(),
                 entidade.getTipo() != null ? entidade.getTipo().name() : null,
-                documentos
+                documentos,
+                perfilEntidadeClient.obter(entidade.getNif())
         ));
     }
 }

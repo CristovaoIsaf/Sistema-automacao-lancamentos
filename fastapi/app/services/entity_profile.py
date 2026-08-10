@@ -21,7 +21,7 @@ nova (Redis/BD).
 
 from collections import Counter, defaultdict
 from threading import Lock
-from typing import Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 from services import pgc as pgc_ao
 
@@ -72,3 +72,38 @@ def tipo_dominante(nif: Optional[str]) -> Optional[str]:
 
         (tipo_unico,) = contagem.keys()
         return tipo_unico
+
+
+def resumo(nif: Optional[str]) -> Dict[str, Any]:
+    """Fase 12 do plano de 20 fases ("Perfil de Entidade" — "reutilizar
+    conhecimento"): até esta fase, o conhecimento acumulado por
+    `registrar_classificacao` só era usado internamente para poupar
+    chamadas de IA (ver document_analyzer.py) — nunca ficava visível a
+    quem consulta o dossiê de uma entidade (ver EntidadeController no
+    lado Java). `resumo` expõe o mesmo estado já mantido por este módulo
+    (a "distribuição" é a mesma Counter que decide `tipo_dominante`, não
+    um cálculo novo/duplicado), para o Java o poder anexar ao dossiê.
+
+    `distribuicaoTiposDocumento` — quais tipos de documento esta
+    entidade costuma enviar (não só o tipo dominante, quando o histórico
+    ainda não é unânime), e `totalDocumentos` — quantos documentos já
+    contribuíram (excluindo reanálises do mesmo fingerprint, ver
+    `registrar_classificacao`). Devolve zeros/None para uma entidade sem
+    histórico — nunca inventa dados."""
+    if not nif:
+        return {"nif": nif, "totalDocumentos": 0, "tipoDominante": None, "distribuicaoTiposDocumento": {}}
+
+    with _lock:
+        contagem = _perfis.get(nif)
+        if not contagem:
+            return {"nif": nif, "totalDocumentos": 0, "tipoDominante": None, "distribuicaoTiposDocumento": {}}
+        distribuicao = dict(contagem)
+
+    total = sum(distribuicao.values())
+    tipo_dominante_atual = tipo_dominante(nif)
+    return {
+        "nif": nif,
+        "totalDocumentos": total,
+        "tipoDominante": tipo_dominante_atual,
+        "distribuicaoTiposDocumento": distribuicao,
+    }

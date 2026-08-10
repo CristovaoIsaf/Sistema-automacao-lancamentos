@@ -1,45 +1,24 @@
 import { apiGet } from './client';
-import type {
-  RelatorioDRE,
-  RelatorioBalanco,
-  RelatorioBalancete,
-  RelatorioRazao,
-  ExportarRelatorioParams
-} from '../types/relatorio';
+import type { RelatorioBalanco, RelatorioDRE } from '../types/relatorio';
 
-export async function obterDRE(periodo: string): Promise<RelatorioDRE> {
-  return apiGet<RelatorioDRE>(`/api/relatorios/dre?periodo=${periodo}`);
+// Fase 13 do plano de 20 fases — DRE/Balanço reais, construídos no
+// backend a partir do mesmo balancete usado em /balancetes (ver
+// DemonstracoesFinanceirasService). obterBalancete/obterRazao/
+// exportarRelatorio foram removidos daqui: Balancete já tem a sua própria
+// API real (balanceteApi.ts, usada por Balancetes.tsx) e Razão/exportação
+// nunca tiveram nenhum endpoint a suportá-los.
+export async function obterDRE(inicio?: string, fim?: string): Promise<RelatorioDRE> {
+  const params = new URLSearchParams();
+  if (inicio) params.append('inicio', inicio);
+  if (fim) params.append('fim', fim);
+  const qs = params.toString();
+  return apiGet<RelatorioDRE>(`/api/demonstracoes/dre${qs ? `?${qs}` : ''}`);
 }
 
-export async function obterBalanco(periodo: string): Promise<RelatorioBalanco> {
-  return apiGet<RelatorioBalanco>(`/api/relatorios/balanco?periodo=${periodo}`);
-}
-
-export async function obterBalancete(periodo: string): Promise<RelatorioBalancete> {
-  return apiGet<RelatorioBalancete>(`/api/relatorios/balancete?periodo=${periodo}`);
-}
-
-export async function obterRazao(conta: string, periodo: string): Promise<RelatorioRazao> {
-  return apiGet<RelatorioRazao>(`/api/relatorios/razao?conta=${conta}&periodo=${periodo}`);
-}
-
-export async function exportarRelatorio(params: ExportarRelatorioParams): Promise<Blob> {
-  const searchParams = new URLSearchParams({
-    formato: params.formato,
-    tipo: params.tipo,
-    periodo: params.periodo
-  });
-  if (params.inicio) searchParams.append('inicio', params.inicio);
-  if (params.fim) searchParams.append('fim', params.fim);
-
-  const response = await fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'}/api/relatorios/exportar?${searchParams.toString()}`,
-    { method: 'GET' }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Erro ${response.status}`);
-  }
-
-  return response.blob();
+export async function obterBalanco(inicio?: string, fim?: string): Promise<RelatorioBalanco> {
+  const params = new URLSearchParams();
+  if (inicio) params.append('inicio', inicio);
+  if (fim) params.append('fim', fim);
+  const qs = params.toString();
+  return apiGet<RelatorioBalanco>(`/api/demonstracoes/balanco${qs ? `?${qs}` : ''}`);
 }
