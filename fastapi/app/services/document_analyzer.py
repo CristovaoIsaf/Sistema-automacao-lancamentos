@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 # diferente, seria confundida com uma actual.
 # v2 — Fase 5 do plano de 20 fases (classificação contabilística) passou a
 # incluir o contexto da empresa (atividade/natureza do negócio) no prompt.
+# Fase 11 — a versão efetiva do cache (ver _classificar_com_anythingllm_cacheado)
+# passou também a incluir _versao_contexto_empresa(contexto_empresa): o
+# CONTEÚDO do contexto (não só a versão do prompt) também invalida o cache
+# quando muda, sem precisar de subir esta constante a cada edição em
+# /configuracoes.
 AI_CACHE_VERSION = "TFC-2026-v2"
 _cache_ia: CacheVersionado = CacheVersionado("ia")
 
@@ -33,6 +38,25 @@ _cache_ia: CacheVersionado = CacheVersionado("ia")
 # _classificar_com_regras. Não classificar só pelo nome do produto: a
 # mesma palavra "fatura" significa coisas diferentes consoante o negócio.
 PALAVRAS_CHAVE_EMPRESA_SERVICOS = ["serviço", "servico", "prestação", "prestacao", "consultoria", "assessoria"]
+
+
+def _versao_contexto_empresa(contexto_empresa: Optional[Dict[str, Any]]) -> str:
+    """Fase 11 do plano de 20 fases ("Cache e IA"): o contexto da empresa
+    (atividade/natureza — Fase 5) entra no prompt enviado à IA
+    (_construir_prompt_classificacao), logo influencia a classificação
+    devolvida. Sem isto na versão do cache, um Administrador que altere a
+    atividade/natureza em /configuracoes faria reanálises do MESMO
+    documento (mesmo fingerprint) continuarem a devolver uma classificação
+    calculada com o contexto ANTIGO — o cache de IA nunca invalidaria,
+    porque a chave (fingerprint, versão) não via a mudança. Mesmo
+    princípio já aplicado a AI_CACHE_VERSION/workspaces (ver
+    cache_versionado.py: "uma entrada antiga nunca é devolvida como se
+    fosse actual")."""
+    if not contexto_empresa:
+        return "sem_contexto"
+    atividade = contexto_empresa.get("atividade_economica") or ""
+    natureza = contexto_empresa.get("natureza_negocio") or ""
+    return f"{atividade}|{natureza}"
 
 
 def _empresa_e_prestadora_de_servicos(contexto_empresa: Optional[Dict[str, Any]]) -> bool:
@@ -207,6 +231,11 @@ class DocumentAnalyzer:
             "entidade": entidade,
             "nif": nif,
             "data": dados_fatura.get("data_emissao") or "",
+            # Fase 10 do plano de 20 fases ("pesquisa por número; série"):
+            # já vinha extraído por regex_extract.py (numero_fatura, ex.
+            # "FT 2026/001" — série+número combinados) mas nunca tinha sido
+            # incluído aqui, ficava sempre perdido antes de chegar ao Java.
+            "numeroDocumento": dados_fatura.get("numero_fatura"),
             "confianca": c.get("confianca", 70),
             "modelo": c.get("modelo", "regras"),
             "fundamentacao": c.get("fundamentacao", ""),
@@ -332,7 +361,10 @@ class DocumentAnalyzer:
         if not fingerprint:
             return self._classificar_com_anythingllm(text, dados_fatura, contexto_empresa), False
 
-        versao = f"{AI_CACHE_VERSION}:{settings.ANYTHINGLLM_WORKSPACE_EXEMPLOS}:{settings.ANYTHINGLLM_WORKSPACE_NORMAS}"
+        versao = (
+            f"{AI_CACHE_VERSION}:{settings.ANYTHINGLLM_WORKSPACE_EXEMPLOS}:{settings.ANYTHINGLLM_WORKSPACE_NORMAS}"
+            f":{_versao_contexto_empresa(contexto_empresa)}"
+        )
         resultado, veio_do_cache = _cache_ia.obter_ou_calcular(
             fingerprint, versao, lambda: self._classificar_com_anythingllm(text, dados_fatura, contexto_empresa)
         )

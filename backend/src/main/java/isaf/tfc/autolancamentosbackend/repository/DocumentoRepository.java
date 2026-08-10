@@ -8,5 +8,8 @@ import java.util.Optional;
 public interface DocumentoRepository extends JpaRepository<DocumentoContabilistico, Long> {
     List<DocumentoContabilistico> findByUserId(Long userId);
 
+    // Fase 10 do plano de 20 fases — dossiê da entidade (ver EntidadeController).
+    List<DocumentoContabilistico> findByEntidadeId(Long entidadeId);
+
     Optional<DocumentoContabilistico> findByHashConteudo(String hashConteudo);
 }

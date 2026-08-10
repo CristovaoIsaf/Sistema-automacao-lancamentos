@@ -11,6 +11,7 @@ import isaf.tfc.autolancamentosbackend.repository.DocumentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.EntidadeRepository;
 import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.SugestaoRepository;
+import isaf.tfc.autolancamentosbackend.service.DocumentoEnriquecimentoService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -51,7 +52,8 @@ class DocumentoControllerTest {
         when(transactionManager.getTransaction(Mockito.any()))
                 .thenReturn(Mockito.mock(TransactionStatus.class));
 
-        controller = new DocumentoController(documentoRepository, entidadeRepository, sugestaoRepository, lancamentoRepository, transactionManager);
+        DocumentoEnriquecimentoService enriquecimentoService = new DocumentoEnriquecimentoService(entidadeRepository, sugestaoRepository);
+        controller = new DocumentoController(documentoRepository, entidadeRepository, sugestaoRepository, lancamentoRepository, enriquecimentoService, transactionManager);
 
         utilizador = new User();
         utilizador.setId(1L);
@@ -60,7 +62,7 @@ class DocumentoControllerTest {
     @Test
     void listar_documentoSemSugestao_ficaPendente() {
         DocumentoContabilistico documento = documentoComId(10L, null);
-        when(documentoRepository.findByUserId(1L)).thenReturn(List.of(documento));
+        when(documentoRepository.findAll()).thenReturn(List.of(documento));
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
         when(sugestaoRepository.findAllByDocumentoId(10L)).thenReturn(List.of());
 
@@ -74,7 +76,7 @@ class DocumentoControllerTest {
     @Test
     void listar_sugestaoPendente_ficaAnalisado() {
         DocumentoContabilistico documento = documentoComId(11L, null);
-        when(documentoRepository.findByUserId(1L)).thenReturn(List.of(documento));
+        when(documentoRepository.findAll()).thenReturn(List.of(documento));
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
         when(sugestaoRepository.findAllByDocumentoId(11L))
                 .thenReturn(List.of(sugestaoComEstado(EstadoSugestao.PENDENTE, LocalDateTime.now())));
@@ -88,7 +90,7 @@ class DocumentoControllerTest {
     void listar_sugestaoAprovada_ficaAprovadoEComNomeDaEntidade() {
         Entidade entidade = new Entidade(5L, "Sonangol Distribuidora Lda", "5417002619", TipoEntidade.FORNECEDOR);
         DocumentoContabilistico documento = documentoComId(12L, 5L);
-        when(documentoRepository.findByUserId(1L)).thenReturn(List.of(documento));
+        when(documentoRepository.findAll()).thenReturn(List.of(documento));
         when(entidadeRepository.findAllById(List.of(5L))).thenReturn(List.of(entidade));
         when(sugestaoRepository.findAllByDocumentoId(12L))
                 .thenReturn(List.of(sugestaoComEstado(EstadoSugestao.APROVADA, LocalDateTime.now())));
@@ -102,7 +104,7 @@ class DocumentoControllerTest {
     @Test
     void listar_sugestaoRejeitada_ficaRejeitado() {
         DocumentoContabilistico documento = documentoComId(13L, null);
-        when(documentoRepository.findByUserId(1L)).thenReturn(List.of(documento));
+        when(documentoRepository.findAll()).thenReturn(List.of(documento));
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
         when(sugestaoRepository.findAllByDocumentoId(13L))
                 .thenReturn(List.of(sugestaoComEstado(EstadoSugestao.REJEITADA, LocalDateTime.now())));
@@ -115,7 +117,7 @@ class DocumentoControllerTest {
     @Test
     void listar_variasSugestoes_usaAEstadoDaMaisRecente() {
         DocumentoContabilistico documento = documentoComId(14L, null);
-        when(documentoRepository.findByUserId(1L)).thenReturn(List.of(documento));
+        when(documentoRepository.findAll()).thenReturn(List.of(documento));
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
         // Reanálise: a primeira sugestão foi rejeitada, a mais recente já foi aprovada.
         when(sugestaoRepository.findAllByDocumentoId(14L)).thenReturn(List.of(
@@ -132,7 +134,7 @@ class DocumentoControllerTest {
     void listar_calculaTamanhoAPartirDosBytesDoConteudo() {
         DocumentoContabilistico documento = documentoComId(15L, null);
         documento.setConteudo(new byte[]{1, 2, 3, 4, 5});
-        when(documentoRepository.findByUserId(1L)).thenReturn(List.of(documento));
+        when(documentoRepository.findAll()).thenReturn(List.of(documento));
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
         when(sugestaoRepository.findAllByDocumentoId(anyLong())).thenReturn(List.of());
 

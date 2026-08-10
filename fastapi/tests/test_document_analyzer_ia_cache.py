@@ -64,6 +64,43 @@ def test_documento_inequivoco_por_regras_nao_consulta_cache_de_ia():
     assert resultado["iaCacheHit"] is False
 
 
+def test_mudanca_de_contexto_da_empresa_forca_nova_chamada_de_ia():
+    # Fase 11 do plano de 20 fases — "Cache e IA": o contexto da empresa
+    # (Fase 5) entra no prompt enviado à IA, por isso faz parte da
+    # versão do cache. Sem isto, um Administrador que alterasse a
+    # atividade/natureza em /configuracoes faria reanálises do MESMO
+    # documento continuarem a devolver a classificação calculada com o
+    # contexto ANTIGO — o cache nunca "veria" a mudança.
+    analyzer = _criar_analyzer()
+    fingerprint = "fp-contexto-empresa"
+
+    with patch.object(analyzer, "_classificar_com_anythingllm", return_value=RESPOSTA_IA) as ia_mock:
+        analyzer.analyze_document(
+            TEXTO_AMBIGUO, {"dados_fatura": {}}, fingerprint,
+            contexto_empresa={"atividade_economica": "Comércio a retalho", "natureza_negocio": ""},
+        )
+        analyzer.analyze_document(
+            TEXTO_AMBIGUO, {"dados_fatura": {}}, fingerprint,
+            contexto_empresa={"atividade_economica": "Prestação de serviços de consultoria", "natureza_negocio": ""},
+        )
+
+    assert ia_mock.call_count == 2  # contexto diferente => cache não reaproveitado
+
+
+def test_mesmo_contexto_da_empresa_reaproveita_cache_de_ia():
+    analyzer = _criar_analyzer()
+    fingerprint = "fp-contexto-empresa-igual"
+    contexto = {"atividade_economica": "Comércio a retalho", "natureza_negocio": ""}
+
+    with patch.object(analyzer, "_classificar_com_anythingllm", return_value=RESPOSTA_IA) as ia_mock:
+        r1 = analyzer.analyze_document(TEXTO_AMBIGUO, {"dados_fatura": {}}, fingerprint, contexto_empresa=contexto)
+        r2 = analyzer.analyze_document(TEXTO_AMBIGUO, {"dados_fatura": {}}, fingerprint, contexto_empresa=dict(contexto))
+
+    assert ia_mock.call_count == 1
+    assert r1["iaCacheHit"] is False
+    assert r2["iaCacheHit"] is True
+
+
 def test_mudanca_de_versao_do_cache_de_ia_forca_nova_chamada():
     """Fase 13 — item 9: usa a constante REAL AI_CACHE_VERSION (não uma
     string arbitrária) para confirmar que uma mudança de versão do

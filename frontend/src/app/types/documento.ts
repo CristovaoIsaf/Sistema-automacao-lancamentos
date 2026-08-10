@@ -8,8 +8,32 @@ export interface Documento {
   dataUpload: string;
   entidadeId?: number | null;
   entidadeNome?: string | null;
+  // Fase 10 do plano de 20 fases ("pesquisa: entidade; NIF; número; série;
+  // tipo; data; valor") — vindos da Sugestao mais recente ligada a este
+  // documento (podem ser null se ainda não foi analisado).
+  entidadeNif?: string | null;
+  tipoDocumento?: string | null;
+  numeroDocumento?: string | null;
+  valor?: string | null;
   tamanho?: number;
   estado?: 'Pendente' | 'Analisado' | 'Aprovado' | 'Rejeitado';
+}
+
+// Espelha Entidade (backend) — Fase 10, GET /api/entidades.
+export interface EntidadeResumo {
+  id: number;
+  nome: string;
+  nif: string;
+  tipo: 'CLIENTE' | 'FORNECEDOR' | 'DESCONHECIDO';
+}
+
+// Espelha EntidadeDossieDTO (backend) — GET /api/entidades/{id}.
+export interface EntidadeDossie {
+  id: number;
+  nome: string;
+  nif: string;
+  tipo: 'CLIENTE' | 'FORNECEDOR' | 'DESCONHECIDO';
+  documentos: Documento[];
 }
 
 export interface UploadDocumentoResponse {

@@ -21,6 +21,11 @@ public class AnaliseResponse {
     private String entidade;
     private String nif;
     private String data;
+
+    // Fase 10 do plano de 20 fases ("pesquisa por número; série") — série
+    // e número da fatura combinados (ex. "FT 2026/001"), extraídos por
+    // regex do lado FastAPI (regex_extract.py::numero_fatura).
+    private String numeroDocumento;
     private Integer confianca;
     private String modelo;
     private List<LinhaSugeridaDTO> linhas;

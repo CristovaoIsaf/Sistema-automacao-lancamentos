@@ -11,6 +11,7 @@ import isaf.tfc.autolancamentosbackend.repository.DocumentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.EntidadeRepository;
 import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.SugestaoRepository;
+import isaf.tfc.autolancamentosbackend.service.DocumentoEnriquecimentoService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -33,7 +34,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -50,17 +50,20 @@ public class DocumentoController {
     private final EntidadeRepository entidadeRepository;
     private final SugestaoRepository sugestaoRepository;
     private final LancamentoRepository lancamentoRepository;
+    private final DocumentoEnriquecimentoService enriquecimentoService;
     private final TransactionTemplate novaTransacao;
 
     public DocumentoController(DocumentoRepository documentoRepository,
                                 EntidadeRepository entidadeRepository,
                                 SugestaoRepository sugestaoRepository,
                                 LancamentoRepository lancamentoRepository,
+                                DocumentoEnriquecimentoService enriquecimentoService,
                                 PlatformTransactionManager transactionManager) {
         this.documentoRepository = documentoRepository;
         this.entidadeRepository = entidadeRepository;
         this.sugestaoRepository = sugestaoRepository;
         this.lancamentoRepository = lancamentoRepository;
+        this.enriquecimentoService = enriquecimentoService;
 
         // PROPAGATION_REQUIRES_NEW — usado só para o save() em upload(): se
         // a constraint UNIQUE em hash_conteudo rebentar (dois uploads
@@ -158,60 +161,24 @@ public class DocumentoController {
     }
 
     /**
-     * Lista os documentos carregados pelo utilizador autenticado (sem o
-     * conteudo do ficheiro, que continua disponível em GET /documentos/{id}).
-     * Inclui entidade e estado (Pendente/Analisado/Aprovado/Rejeitado) para a
-     * página de Arquivo agrupar e filtrar os documentos — mesma lógica de
-     * agrupamento por entidade e de rastreio Documento→Sugestao já usada em
-     * gerarZip()/adicionarLinhasManifesto().
+     * Lista TODOS os documentos da empresa (sem o conteudo do ficheiro, que
+     * continua disponível em GET /documentos/{id}). Inclui entidade,
+     * estado (Pendente/Analisado/Aprovado/Rejeitado) e, quando já
+     * analisado, tipo/número/valor — para a página de Arquivo pesquisar e
+     * agrupar os documentos (Fase 10 do plano de 20 fases).
+     *
+     * Antes desta fase filtrava por findByUserId(user.getId()) — um
+     * Auditor (que nunca faz upload, RN010) via sempre um arquivo vazio, e
+     * um Contabilista não via os documentos carregados por outro
+     * contabilista da mesma empresa. Contradizia a própria regra desta
+     * fase: "a identidade documental não depende do contabilista;
+     * contabilista = autoria/auditoria" — o documento pertence à empresa
+     * (este projecto é single-tenant), não a quem o carregou.
      */
     @GetMapping
     @Transactional(readOnly = true)
     public ResponseEntity<List<DocumentoResponseDTO>> listar(@AuthenticationPrincipal User user) {
-        List<DocumentoContabilistico> documentos = documentoRepository.findByUserId(user.getId());
-
-        Map<Long, Entidade> entidadesPorId = entidadeRepository.findAllById(
-                documentos.stream()
-                        .map(DocumentoContabilistico::getEntidadeId)
-                        .filter(Objects::nonNull)
-                        .distinct()
-                        .toList()
-        ).stream().collect(Collectors.toMap(Entidade::getId, e -> e));
-
-        List<DocumentoResponseDTO> resposta = documentos.stream()
-                .map(doc -> {
-                    Entidade entidade = doc.getEntidadeId() != null ? entidadesPorId.get(doc.getEntidadeId()) : null;
-                    return new DocumentoResponseDTO(
-                            doc.getId(),
-                            doc.getNomeFicheiro(),
-                            doc.getTipoConteudo(),
-                            doc.getDataUpload(),
-                            doc.getEntidadeId(),
-                            entidade != null ? entidade.getNome() : null,
-                            doc.getConteudo() != null ? doc.getConteudo().length : 0,
-                            estadoDocumento(doc)
-                    );
-                })
-                .toList();
-
-        return ResponseEntity.ok(resposta);
-    }
-
-    private String estadoDocumento(DocumentoContabilistico documento) {
-        List<Sugestao> sugestoes = sugestaoRepository.findAllByDocumentoId(documento.getId());
-        if (sugestoes.isEmpty()) {
-            return "Pendente";
-        }
-
-        Sugestao maisRecente = sugestoes.stream()
-                .max(Comparator.comparing(Sugestao::getDataCriacao))
-                .orElse(sugestoes.get(0));
-
-        return switch (maisRecente.getEstado()) {
-            case APROVADA -> "Aprovado";
-            case REJEITADA -> "Rejeitado";
-            case PENDENTE -> "Analisado";
-        };
+        return ResponseEntity.ok(enriquecimentoService.converterTodos(documentoRepository.findAll()));
     }
 
     @GetMapping("/{id}")

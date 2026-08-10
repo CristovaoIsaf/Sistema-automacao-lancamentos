@@ -46,6 +46,11 @@ public class Sugestao {
 
     private String nif;
 
+    // Série+número da fatura (ex. "FT 2026/001") — Fase 10 do plano de 20
+    // fases, "pesquisa por número; série". Aditiva: sugestões antigas
+    // ficam com null.
+    private String numeroDocumento;
+
     @Column(columnDefinition = "TEXT")
     private String descricao;
 

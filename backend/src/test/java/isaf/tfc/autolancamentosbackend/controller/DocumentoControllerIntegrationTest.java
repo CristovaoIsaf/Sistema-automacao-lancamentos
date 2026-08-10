@@ -104,10 +104,21 @@ class DocumentoControllerIntegrationTest {
         User utilizador = new User();
         utilizador.setId(998L);
 
+        Long documentoId = documento.getId();
+        // Fase 10 do plano de 20 fases: listar() já não filtra por
+        // findByUserId — devolve TODOS os documentos da empresa (o
+        // documento pertence à empresa, não a quem o carregou), por isso
+        // não se pode assumir que este é o único da lista (a BD de
+        // desenvolvimento usada nestes testes tem documentos de sessões
+        // anteriores) — filtra pelo id, tal como o teste acima já fazia.
         List<DocumentoResponseDTO> resposta = documentoController.listar(utilizador).getBody();
 
-        assertThat(resposta).hasSize(1);
-        assertThat(resposta.get(0).getEstado()).isEqualTo("Pendente");
-        assertThat(resposta.get(0).getEntidadeNome()).isNull();
+        DocumentoResponseDTO dto = resposta.stream()
+                .filter(d -> d.getId().equals(documentoId))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(dto.getEstado()).isEqualTo("Pendente");
+        assertThat(dto.getEntidadeNome()).isNull();
     }
 }

@@ -28,9 +28,20 @@ public class DocumentoResponseDTO {
 
     private String entidadeNome;
 
+    private String entidadeNif;
+
     private long tamanho;
 
     // "Pendente" | "Analisado" | "Aprovado" | "Rejeitado" — derivado da Sugestao
     // mais recente ligada a este documento (ver DocumentoController.listar()).
     private String estado;
+
+    // Fase 10 do plano de 20 fases ("pesquisa: entidade; NIF; número;
+    // série; tipo; data; valor") — também vindos da Sugestao mais recente
+    // (podem ser null se o documento ainda não foi analisado).
+    private String tipoDocumento;
+
+    private String numeroDocumento;
+
+    private String valor;
 }
