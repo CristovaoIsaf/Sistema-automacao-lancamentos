@@ -35,3 +35,17 @@ def test_plano_de_contas_iva_dedutivel_e_liquidado_tem_naturezas_opostas():
 
     assert por_codigo["34.5.1"]["natureza"] == "DEVEDORA"
     assert por_codigo["34.5.2"]["natureza"] == "CREDORA"
+
+
+def test_plano_de_contas_inclui_capital_e_reservas_legais_classe_5_credoras():
+    por_codigo = {c["codigo"]: c for c in pgc_ao.plano_de_contas()}
+
+    capital = por_codigo["51"]
+    assert capital["nome"] == "Capital"
+    assert capital["classe"] == "5"
+    assert capital["natureza"] == "CREDORA"
+
+    reservas = por_codigo["55"]
+    assert reservas["nome"] == "Reservas legais"
+    assert reservas["classe"] == "5"
+    assert reservas["natureza"] == "CREDORA"

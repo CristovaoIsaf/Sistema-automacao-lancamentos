@@ -174,7 +174,10 @@ decreto original é anterior à introdução do IVA em Angola.
 
 - Sem movimento de existências/CMVC — a Demonstração de Resultados trata
   Compras como gasto do período inteiro, sem ajuste de stock.
-- Sem contas de Capital Próprio/Património Líquido — o Balanço não fecha
-  necessariamente a zero (ver campo `diferenca` na resposta da API).
-- Sem Fluxo de Caixa nem Livro Razão.
+- Capital Próprio (Decreto 82/01, classe 5 — Capital/Reservas) está no
+  Balanço, mas este sistema não tem fecho de exercício: o resultado do
+  período fica sempre em Capital Próprio como "Resultado do Exercício"
+  pendente de aplicação, e sem Ativo Não Corrente modelado o Balanço pode
+  ainda não fechar exatamente a zero (ver campo `diferenca` na resposta
+  da API).
 - Sem endpoint de registo público (ver [Primeiro utilizador](#5-primeiro-utilizador)).

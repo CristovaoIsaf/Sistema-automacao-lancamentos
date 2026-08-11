@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { BarChart3, FileText, Wallet, Loader2, AlertCircle, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
 import { intervaloDoPeriodo } from '../data/periodo';
-import { obterDRE, obterBalanco } from '../api/relatorioApi';
-import type { RelatorioDRE, RelatorioBalanco } from '../types/relatorio';
+import { obterDRE, obterBalanco, obterFluxoCaixa } from '../api/relatorioApi';
+import type { RelatorioDRE, RelatorioBalanco, RelatorioFluxoCaixa } from '../types/relatorio';
 
 // Fase 13 do plano de 20 fases — "garantir consistência entre lançamentos
 // → balancete → balanço → DRE... não criar cálculos independentes no
@@ -13,11 +13,17 @@ import type { RelatorioDRE, RelatorioBalanco } from '../types/relatorio';
 // dedicada (/balancetes, ver Balancetes.tsx) — não duplicada aqui.
 // Livro Razão nunca teve nenhum endpoint real a suportá-lo nem estava
 // ligado à navegação — fica fora do âmbito desta fase (ver relatório).
-type TabKey = 'dre' | 'balanco';
+//
+// Fase 17 do plano de 20 fases — Fluxo de Caixa: método direto, sem
+// classificação operacional/investimento/financiamento (ver decisão
+// documentada em FluxoCaixaService). Antes desta fase não existia
+// nenhuma visão dos movimentos reais de Caixa/Depósitos.
+type TabKey = 'dre' | 'balanco' | 'fluxo-caixa';
 
 const tabs: { key: TabKey; label: string; icon: React.ElementType }[] = [
-  { key: 'dre',     label: 'DRE', icon: BarChart3 },
-  { key: 'balanco', label: 'Balanço', icon: FileText },
+  { key: 'dre',          label: 'DRE', icon: BarChart3 },
+  { key: 'balanco',      label: 'Balanço', icon: FileText },
+  { key: 'fluxo-caixa',  label: 'Fluxo de Caixa', icon: Wallet },
 ];
 
 export function Relatorios() {
@@ -26,6 +32,7 @@ export function Relatorios() {
 
   const [dre, setDre] = useState<RelatorioDRE | null>(null);
   const [balanco, setBalanco] = useState<RelatorioBalanco | null>(null);
+  const [fluxoCaixa, setFluxoCaixa] = useState<RelatorioFluxoCaixa | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -36,11 +43,12 @@ export function Relatorios() {
 
     const { inicio, fim } = intervaloDoPeriodo(periodo);
 
-    Promise.all([obterDRE(inicio, fim), obterBalanco(inicio, fim)])
-      .then(([dadosDre, dadosBalanco]) => {
+    Promise.all([obterDRE(inicio, fim), obterBalanco(inicio, fim), obterFluxoCaixa(inicio, fim)])
+      .then(([dadosDre, dadosBalanco, dadosFluxoCaixa]) => {
         if (cancelado) return;
         setDre(dadosDre);
         setBalanco(dadosBalanco);
+        setFluxoCaixa(dadosFluxoCaixa);
       })
       .catch((e) => {
         if (cancelado) return;
@@ -180,7 +188,7 @@ export function Relatorios() {
       ) : activeTab === 'balanco' && balanco ? (
         <div className="space-y-4">
           <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-2.5 text-[12px] text-[#92400E]">
-            Este balanço mostra só contas de Terceiros e Meios monetários (Clientes, Fornecedores, Caixa, Depósitos, IVA) — o plano de contas deste sistema (Decreto 82/01, âmbito reduzido do TFC) não modela Ativo Não Corrente nem Capital Próprio/Património Líquido, por isso Ativo e Passivo não fecham necessariamente ao mesmo valor.
+            Ativo cobre Terceiros e Meios monetários; Capital Próprio cobre Capital e Reservas (Decreto 82/01, classe 5) mais o Resultado do Exercício (reaproveitado da DRE — este sistema não tem fecho de exercício, por isso o resultado do período fica sempre "pendente de aplicação"). O plano de contas deste TFC (âmbito reduzido) ainda não modela Ativo Não Corrente, por isso o Balanço pode não fechar exatamente a zero.
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -220,13 +228,99 @@ export function Relatorios() {
                       <td className="px-4 py-2.5 text-[13px] text-right text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(l.valor)}</td>
                     </tr>
                   ))}
-                  <tr className="bg-[#F8FAFC]">
+                  <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                     <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">TOTAL PASSIVO</td>
                     <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(balanco.totalPassivo)}</td>
                   </tr>
                 </tbody>
               </table>
+
+              <div className="px-4 py-3 border-b border-t border-[#E2E8F0]">
+                <h2 className="text-[13px] font-semibold text-[#0F172A]">Capital Próprio</h2>
+              </div>
+              <table className="w-full">
+                <tbody>
+                  {balanco.capitalProprio.map(l => (
+                    <tr key={l.conta} className="border-b border-[#F1F5F9]">
+                      <td className="px-4 py-2.5 text-[13px] text-[#475569]">{l.conta} — {l.nome}</td>
+                      <td className={`px-4 py-2.5 text-[13px] text-right ${l.valor < 0 ? 'text-[#DC2626]' : 'text-[#0F172A]'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(l.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-[#F8FAFC]">
+                    <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">TOTAL CAPITAL PRÓPRIO</td>
+                    <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(balanco.totalCapitalProprio)}</td>
+                  </tr>
+                  <tr className="bg-[#EFF6FF] border-t-2 border-[#BFDBFE]">
+                    <td className="px-4 py-2.5 text-[13px] font-semibold text-[#0F172A]">TOTAL PASSIVO + CAPITAL PRÓPRIO</td>
+                    <td className="px-4 py-2.5 text-[13px] text-right font-semibold text-[#2563EB]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(balanco.totalPassivo + balanco.totalCapitalProprio)}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
+          </div>
+        </div>
+      ) : activeTab === 'fluxo-caixa' && fluxoCaixa ? (
+        <div className="space-y-4">
+          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-2.5 text-[12px] text-[#92400E]">
+            Método direto: lista os movimentos reais de Caixa e Depósitos. Não classifica em atividades operacionais/investimento/financiamento — este plano de contas (Decreto 82/01, âmbito reduzido do TFC) não modela essa distinção, e inventar uma classificação não verificada seria pior do que não a ter.
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Entradas', value: fluxoCaixa.totalEntradas, color: 'text-[#059669]' },
+              { label: 'Saídas', value: fluxoCaixa.totalSaidas, color: 'text-[#DC2626]' },
+              { label: 'Saldo do Período', value: fluxoCaixa.saldoPeriodo, color: fluxoCaixa.saldoPeriodo >= 0 ? 'text-[#2563EB]' : 'text-[#DC2626]' },
+            ].map(kpi => (
+              <div key={kpi.label} className="bg-white border border-[#E2E8F0] rounded-lg p-4">
+                <p className="text-[12px] font-medium text-[#475569] mb-2">{kpi.label}</p>
+                <p className={`text-[22px] font-bold ${kpi.color}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {formatarKwanza(kpi.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#E2E8F0]">
+              <h2 className="text-[13px] font-semibold text-[#0F172A]">Movimentos de Caixa e Depósitos</h2>
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium text-[#475569] uppercase tracking-wide">Data</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium text-[#475569] uppercase tracking-wide">Descrição</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium text-[#475569] uppercase tracking-wide">Conta</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium text-[#475569] uppercase tracking-wide">Contraparte</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-medium text-[#475569] uppercase tracking-wide">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fluxoCaixa.movimentos.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                      Nenhum movimento de caixa no período selecionado.
+                    </td>
+                  </tr>
+                ) : (
+                  fluxoCaixa.movimentos.map((m, i) => (
+                    <tr key={`${m.lancamentoId}-${m.conta}-${m.tipo}-${i}`} className="border-b border-[#F1F5F9]">
+                      <td className="px-4 py-2.5 text-[12px] text-[#64748B]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                        {m.data ? new Date(m.data).toLocaleDateString('pt-AO') : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-[13px] text-[#0F172A]">{m.descricao ?? '—'}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-[#475569]">{m.conta} — {m.nomeConta}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-[#475569]">{m.contraConta ?? '—'}</td>
+                      <td className={`px-4 py-2.5 text-[13px] text-right font-medium ${m.tipo === 'ENTRADA' ? 'text-[#059669]' : 'text-[#DC2626]'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          {m.tipo === 'ENTRADA' ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
+                          {formatarKwanza(m.valor)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}

@@ -43,6 +43,7 @@ class DemonstracoesFinanceirasServiceTest {
                 new ContaDTO("31", "Clientes", "3", null, "DEVEDORA"),
                 new ContaDTO("32", "Fornecedores", "3", null, "CREDORA"),
                 new ContaDTO("45", "Caixa", "4", null, "DEVEDORA"),
+                new ContaDTO("51", "Capital", "5", null, "CREDORA"),
                 new ContaDTO("34.5.1", "IVA dedutível", "3", "34.5.1", "DEVEDORA"),
                 new ContaDTO("34.5.2", "IVA liquidado", "3", "34.5.2", "CREDORA")
         ));
@@ -102,7 +103,42 @@ class DemonstracoesFinanceirasServiceTest {
         assertThat(balanco.getPassivo()).extracting(l -> l.getConta()).containsExactlyInAnyOrder("32", "34.5.2");
         assertThat(balanco.getTotalPassivo()).isEqualByComparingTo("20000.00");
 
-        assertThat(balanco.getDiferenca()).isEqualByComparingTo("30000.00");
+        // Resultado do período (Fase 19) reaproveitado da DRE: Vendas
+        // (100000) - Compras (40000) = 60000, entra em Capital Próprio
+        // como "88 — Resultado do Exercício" (nenhuma conta de classe 5
+        // lançada neste balancete).
+        assertThat(balanco.getCapitalProprio()).extracting(l -> l.getConta()).containsExactly("88");
+        assertThat(balanco.getTotalCapitalProprio()).isEqualByComparingTo("60000.00");
+
+        // 50000 (ativo) - (20000 (passivo) + 60000 (capital próprio)) = -30000
+        assertThat(balanco.getDiferenca()).isEqualByComparingTo("-30000.00");
+    }
+
+    @Test
+    void gerarBalanco_incluiContasDeCapitalProprioDaClasse5EResultadoDoExercicio() {
+        BalanceteResponseDTO balancete = new BalanceteResponseDTO(
+                List.of(
+                        linha("45", "Caixa", new BigDecimal("150000.00"), BigDecimal.ZERO, new BigDecimal("150000.00"), BigDecimal.ZERO),
+                        linha("51", "Capital", BigDecimal.ZERO, new BigDecimal("100000.00"), BigDecimal.ZERO, new BigDecimal("100000.00")),
+                        linha("61", "Vendas", BigDecimal.ZERO, new BigDecimal("60000.00"), BigDecimal.ZERO, new BigDecimal("60000.00")),
+                        linha("21", "Compras", new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("10000.00"), BigDecimal.ZERO)
+                ),
+                new BigDecimal("160000.00"), new BigDecimal("160000.00"),
+                new BigDecimal("150000.00"), new BigDecimal("160000.00"), false
+        );
+        when(balanceteService.gerarBalancete(any(), any())).thenReturn(balancete);
+
+        BalancoResponseDTO balanco = service.gerarBalanco(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+        assertThat(balanco.getCapitalProprio()).extracting(l -> l.getConta()).containsExactlyInAnyOrder("51", "88");
+        var capital = balanco.getCapitalProprio().stream().filter(l -> l.getConta().equals("51")).findFirst().orElseThrow();
+        assertThat(capital.getValor()).isEqualByComparingTo("100000.00");
+        var resultado = balanco.getCapitalProprio().stream().filter(l -> l.getConta().equals("88")).findFirst().orElseThrow();
+        assertThat(resultado.getValor()).isEqualByComparingTo("50000.00");
+        assertThat(balanco.getTotalCapitalProprio()).isEqualByComparingTo("150000.00");
+
+        // 150000 (Caixa) - (0 (passivo) + 150000 (capital próprio)) = 0 — fecha a zero.
+        assertThat(balanco.getDiferenca()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
@@ -118,6 +154,11 @@ class DemonstracoesFinanceirasServiceTest {
         assertThat(balanco.getPassivo()).isEmpty();
         assertThat(balanco.getTotalAtivo()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(balanco.getTotalPassivo()).isEqualByComparingTo(BigDecimal.ZERO);
+        // Ainda assim há uma linha sintética "88 — Resultado do Exercício"
+        // (0.00) — a DRE de um período sem movimento devolve resultado
+        // zero, não uma lista vazia.
+        assertThat(balanco.getCapitalProprio()).extracting(l -> l.getConta()).containsExactly("88");
+        assertThat(balanco.getTotalCapitalProprio()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(balanco.getDiferenca()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 

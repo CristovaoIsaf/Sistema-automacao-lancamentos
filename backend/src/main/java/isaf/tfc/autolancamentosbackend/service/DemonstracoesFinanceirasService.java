@@ -45,13 +45,17 @@ public class DemonstracoesFinanceirasService {
     private static final Set<String> CLASSES_GASTO = Set.of("7", "2");
 
     // Classe 3 (Terceiros: Clientes/Fornecedores/Estado) + classe 4 (Meios
-    // monetários: Caixa/Depósitos) — as únicas classes deste PGC-AO
-    // reduzido que são genuinamente de balanço (não de resultados).
-    // Excluir classes 2/6/7 do Balanço evita contar o MESMO valor duas
-    // vezes (uma na DRE como gasto/receita do período, outra aqui como
-    // "saldo" — este sistema não tem fecho de exercício/encerramento de
-    // contas de resultados que evite essa sobreposição).
+    // monetários: Caixa/Depósitos) — as duas classes de Passivo/Ativo
+    // deste PGC-AO reduzido. Excluir classes 2/6/7 do Balanço evita contar
+    // o MESMO valor duas vezes (uma na DRE como gasto/receita do período,
+    // outra aqui como "saldo" — este sistema não tem fecho de exercício/
+    // encerramento de contas de resultados que evite essa sobreposição).
     private static final Set<String> CLASSES_BALANCO = Set.of("3", "4");
+
+    // Classe 5 — Capital e Reservas (Fase 19 do plano de 20 fases).
+    // Separada de CLASSES_BALANCO porque entra numa secção própria
+    // (Capital Próprio), não em Ativo/Passivo.
+    private static final String CLASSE_CAPITAL_PROPRIO = "5";
 
     private static final String NATUREZA_DEVEDORA = "DEVEDORA";
     private static final String NATUREZA_CREDORA = "CREDORA";
@@ -104,10 +108,27 @@ public class DemonstracoesFinanceirasService {
                 .map(l -> new LinhaDemonstracaoDTO(l.getConta(), l.getNome(), l.getSaldoCredor()))
                 .toList();
 
+        List<LinhaDemonstracaoDTO> capitalProprio = new java.util.ArrayList<>(balancete.getLinhas().stream()
+                .filter(l -> pertenceAClasse(l.getConta(), contasPorCodigo, Set.of(CLASSE_CAPITAL_PROPRIO)))
+                .filter(l -> l.getSaldoCredor().signum() > 0)
+                .map(l -> new LinhaDemonstracaoDTO(l.getConta(), l.getNome(), l.getSaldoCredor()))
+                .toList());
+
+        // Resultado do período (Fase 19): reutiliza gerarDRE — nunca
+        // recalcula receitas/gastos aqui (mesma disciplina "fonte única"
+        // já aplicada ao Balancete). "88" é o código real do Decreto 82/01
+        // para "Resultado Líquido do Exercício" (classe 8) — usado só como
+        // rótulo desta linha sintética, nunca lançado (este sistema não
+        // tem fecho de exercício).
+        BigDecimal resultadoExercicio = gerarDRE(inicio, fim).getResultadoLiquido();
+        capitalProprio.add(new LinhaDemonstracaoDTO("88", "Resultado do Exercício", resultadoExercicio));
+
         BigDecimal totalAtivo = somar(ativo);
         BigDecimal totalPassivo = somar(passivo);
+        BigDecimal totalCapitalProprio = somar(capitalProprio);
 
-        return new BalancoResponseDTO(inicio, fim, ativo, totalAtivo, passivo, totalPassivo, totalAtivo.subtract(totalPassivo));
+        return new BalancoResponseDTO(inicio, fim, ativo, totalAtivo, passivo, totalPassivo,
+                capitalProprio, totalCapitalProprio, totalAtivo.subtract(totalPassivo.add(totalCapitalProprio)));
     }
 
     private Map<String, ContaDTO> contasPorCodigo() {

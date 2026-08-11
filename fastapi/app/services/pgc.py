@@ -40,6 +40,16 @@ C_FORNECEDORES = ("32", "Fornecedores")
 # Classe 4 — Meios monetários
 C_BANCO = ("43", "Depósitos à ordem")
 C_CAIXA = ("45", "Caixa")
+# Classe 5 — Capital e Reservas (Fase 19 do plano de 20 fases). Códigos e
+# nomes verificados literalmente contra o texto do Decreto 82/01 (secção
+# "5 – Capital e Reservas" do quadro e lista de contas) — ao contrário do
+# IVA (34.5.1/34.5.2), NÃO são uma extensão do projeto. Só duas das oito
+# subcontas de classe 5 do decreto (51 a 58) foram trazidas para este TFC:
+# as que um contabilista realisticamente usaria através do Lançamento
+# Manual (não há nenhum tipo de documento automático que gere um
+# lançamento de capital — está fora do âmbito "compra, venda, pagamentos").
+C_CAPITAL = ("51", "Capital")
+C_RESERVAS_LEGAIS = ("55", "Reservas legais")
 # Classe 6 — Proveitos e ganhos por natureza
 C_VENDAS = ("61", "Vendas")
 C_PRESTACAO_SERVICOS = ("62", "Prestações de serviços")
@@ -307,6 +317,7 @@ def lancamento_equilibrado(linhas: List[Dict[str, str]]) -> bool:
 # GET /pgc/contas em vez de manter uma cópia.
 _TODAS_AS_CONTAS: List[tuple] = [
     C_COMPRAS, C_MERCADORIAS, C_CLIENTES, C_FORNECEDORES, C_BANCO, C_CAIXA,
+    C_CAPITAL, C_RESERVAS_LEGAIS,
     C_VENDAS, C_PRESTACAO_SERVICOS, C_FSE, C_FSE_AGUA, C_FSE_ELECTRICIDADE,
     C_FSE_CONSERVACAO, C_FSE_RENDAS, C_FSE_SEGUROS, C_FSE_DESLOCACOES,
     C_FSE_COMUNICACAO, CONTA_IVA_DEDUTIVEL, CONTA_IVA_LIQUIDADO,
@@ -322,6 +333,8 @@ _CONTAS_NATUREZA: Dict[str, str] = {
     C_FORNECEDORES[0]: "CREDORA",
     C_BANCO[0]: "DEVEDORA",
     C_CAIXA[0]: "DEVEDORA",
+    C_CAPITAL[0]: "CREDORA",
+    C_RESERVAS_LEGAIS[0]: "CREDORA",
     C_VENDAS[0]: "CREDORA",
     C_PRESTACAO_SERVICOS[0]: "CREDORA",
     C_FSE[0]: "DEVEDORA",
@@ -339,7 +352,8 @@ _CONTAS_NATUREZA: Dict[str, str] = {
 
 def _classe_da_conta(codigo: str) -> str:
     """Primeiro dígito do código — a classe do Decreto 82/01 (2=Existências,
-    3=Terceiros, 4=Meios monetários, 6=Proveitos, 7=Custos)."""
+    3=Terceiros, 4=Meios monetários, 5=Capital e Reservas, 6=Proveitos,
+    7=Custos)."""
     return codigo[0] if codigo and codigo[0].isdigit() else ""
 
 
