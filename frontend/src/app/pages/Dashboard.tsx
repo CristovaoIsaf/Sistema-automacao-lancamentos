@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import {
   TrendingUp, TrendingDown, AlertCircle,
-  ChevronRight, Eye, Edit2,
-  FileStack, Sparkles, CheckCircle2, Target,
+  ChevronRight, Eye, Edit2, ExternalLink,
+  FileStack, Sparkles, CheckCircle2, Target, Users, Clock,
 } from 'lucide-react';
 import {
   lancamentosMock, formatarKwanza, dadosGraficoMensal,
 } from '../data/mockData';
-import { obterDashboard } from '../api/dashboardApi';
+import { obterDashboard, obterDashboardAdministrador } from '../api/dashboardApi';
+import { useAuth } from '../auth/AuthContext';
+import type { DashboardAdministrador } from '../types/dashboardAdmin';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Area, AreaChart,
@@ -130,12 +132,30 @@ const kpisFallback: Kpis = {
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
+const MESES_PT_LONGO = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+function mesAnoAtual(): string {
+  const hoje = new Date();
+  return `${MESES_PT_LONGO[hoje.getMonth()]} ${hoje.getFullYear()}`;
+}
+
 export function Dashboard() {
+  const { perfil } = useAuth();
   const [chartData, setChartData] = useState(dadosGraficoMensal.slice(-6));
   const [lancamentos, setLancamentos] = useState<LinhaLancamento[]>(documentosRecentesFallback);
   const [kpis, setKpis] = useState<Kpis>(kpisFallback);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Fase 15 do plano de 20 fases — "o administrador não deve simplesmente
+  // receber a mesma interface do contabilista": dados exclusivos da
+  // visão de Administrador, só pedidos (e só devolvidos pelo backend,
+  // ver DashboardController) quando o perfil autenticado é esse.
+  const [dashboardAdmin, setDashboardAdmin] = useState<DashboardAdministrador | null>(null);
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -172,6 +192,25 @@ export function Dashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    if (perfil !== 'ADMINISTRADOR') {
+      setDashboardAdmin(null);
+      return;
+    }
+    let cancelado = false;
+    setLoadingAdmin(true);
+
+    obterDashboardAdministrador()
+      .then((dados) => { if (!cancelado) setDashboardAdmin(dados); })
+      .catch((e) => {
+        if (cancelado) return;
+        console.error('Erro ao carregar dashboard de administrador:', e);
+      })
+      .finally(() => { if (!cancelado) setLoadingAdmin(false); });
+
+    return () => { cancelado = true; };
+  }, [perfil]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -192,13 +231,7 @@ export function Dashboard() {
           <div className="w-1 h-9 rounded-full bg-[#2563EB]" />
           <div>
             <h1 className="text-[19px] font-semibold text-[#0F172A] tracking-tight">Dashboard</h1>
-            <p className="text-[13px] text-[#475569] mt-0.5">Visão geral · Julho 2026</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] px-2.5 py-1.5 rounded-md text-[11px] font-medium">
-            <AlertCircle style={{ width: 12, height: 12 }} />
-            5 faturas · prazo excedido · PD 71/25
+            <p className="text-[13px] text-[#475569] mt-0.5">Visão geral · {mesAnoAtual()}</p>
           </div>
         </div>
       </div>
@@ -246,6 +279,74 @@ export function Dashboard() {
         />
       </div>
 
+      {/* Fase 15 do plano de 20 fases — "o administrador não deve
+          simplesmente receber a mesma interface do contabilista": em vez
+          de Lançamentos Recentes + gráficos (mais úteis a quem opera o
+          dia-a-dia), o Administrador vê atividade por contabilista
+          ("acompanhar contabilistas") e pendências ("visualizar
+          pendências") — dados que só o backend devolve a este perfil
+          (ver GET /api/dashboard/administrador, @PreAuthorize
+          ADMINISTRADOR). */}
+      {perfil === 'ADMINISTRADOR' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[#E2E8F0]">
+              <Users style={{ width: 14, height: 14 }} className="text-[#2563EB]" />
+              <h2 className="text-[14px] font-semibold text-[#0F172A]">Atividade por Contabilista</h2>
+            </div>
+            {loadingAdmin ? (
+              <p className="px-4 py-6 text-center text-[13px] text-[#94A3B8]">A carregar...</p>
+            ) : !dashboardAdmin || dashboardAdmin.atividadePorUtilizador.length === 0 ? (
+              <p className="px-4 py-6 text-center text-[13px] text-[#94A3B8]">Ainda não há atividade registada.</p>
+            ) : (
+              <div className="divide-y divide-[#F1F5F9]">
+                {dashboardAdmin.atividadePorUtilizador.map((a) => (
+                  <div key={a.utilizador} className="flex items-center justify-between px-4 py-2.5">
+                    <div>
+                      <p className="text-[13px] font-medium text-[#0F172A]">{a.utilizador}</p>
+                      <p className="text-[11px] text-[#94A3B8]">{a.perfil ?? '—'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[13px] font-semibold text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{a.totalAcoes}</p>
+                      <p className="text-[11px] text-[#94A3B8]">{a.ultimaAcao ? new Date(a.ultimaAcao).toLocaleDateString('pt-AO') : '—'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[#E2E8F0]">
+              <Clock style={{ width: 14, height: 14 }} className="text-[#D97706]" />
+              <h2 className="text-[14px] font-semibold text-[#0F172A]">Pendências</h2>
+            </div>
+            {loadingAdmin ? (
+              <p className="px-4 py-6 text-center text-[13px] text-[#94A3B8]">A carregar...</p>
+            ) : !dashboardAdmin || dashboardAdmin.pendencias.length === 0 ? (
+              <p className="px-4 py-6 text-center text-[13px] text-[#94A3B8]">Sem sugestões pendentes.</p>
+            ) : (
+              <div className="divide-y divide-[#F1F5F9]">
+                {dashboardAdmin.pendencias.map((p) => (
+                  <div key={p.sugestaoId} className="flex items-center justify-between px-4 py-2.5 gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] text-[#0F172A] truncate">{p.entidade ?? p.descricao}</p>
+                      <p className="text-[11px] text-[#94A3B8]">{formatarKwanza(Number(p.valor) || 0)}</p>
+                    </div>
+                    <a
+                      href="/lancamentos"
+                      className="flex items-center gap-1 text-[11px] text-[#2563EB] hover:text-[#1D4ED8] shrink-0"
+                    >
+                      Rever <ExternalLink style={{ width: 11, height: 11 }} />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
       {/* Tabela: Lançamentos Recentes */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#E2E8F0]">
@@ -395,6 +496,8 @@ export function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

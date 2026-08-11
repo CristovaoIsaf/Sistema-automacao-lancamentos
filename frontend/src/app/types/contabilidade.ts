@@ -13,14 +13,16 @@ export interface Utilizador {
   ultimoAcesso: string;
 }
 
-// Registo de auditoria (UC010, RF017)
+// Registo de auditoria (UC010, RF017) — Fase 15 do plano de 20 fases:
+// perfil/dataHora podem vir null (utilizador entretanto apagado, ou
+// lançamento anterior à Fase 15 sem timestamp — ver AuditoriaService).
 export interface LogAuditoria {
   id: string;
   utilizador: string;
-  perfil: Perfil;
+  perfil: Perfil | null;
   acao: string;
   entidade: string;
-  dataHora: string;
+  dataHora: string | null;
 }
 
 export interface Lancamento {

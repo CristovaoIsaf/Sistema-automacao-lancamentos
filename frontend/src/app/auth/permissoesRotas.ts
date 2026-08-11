@@ -24,7 +24,12 @@ export const PERFIS_POR_ROTA: Record<string, Perfil[]> = {
   '/notas-contas': TODOS,
   '/ia-categorizacao': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/plano-contas': ['ADMINISTRADOR'],
-  '/utilizadores': ['ADMINISTRADOR'],
+  // Fase 16 do plano de 20 fases ("auditor: utilizadores") — o backend já
+  // permitia GET /api/utilizadores a AUDITOR (UserController), mas a rota
+  // aqui ainda bloqueava o acesso à página. Utilizadores.tsx já esconde
+  // "Novo Utilizador"/"Editar" com podeGerirUtilizadores (ADMINISTRADOR),
+  // por isso alargar aqui dá visão sem dar escrita.
+  '/utilizadores': ['ADMINISTRADOR', 'AUDITOR'],
   '/auditoria': ['ADMINISTRADOR', 'AUDITOR'],
   '/configuracoes': ['ADMINISTRADOR'],
 };

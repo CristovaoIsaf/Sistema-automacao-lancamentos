@@ -140,7 +140,8 @@ public class LancamentoServiceImpl implements LancamentoService {
     @Transactional
     public LancamentoResponseDTO atualizar(
             Long id,
-            LancamentoRequestDTO request
+            LancamentoRequestDTO request,
+            Long alteradoPor
     ) {
 
         Lancamento lancamento =
@@ -152,6 +153,7 @@ public class LancamentoServiceImpl implements LancamentoService {
 
         lancamento.setDescricao(request.getDescricao());
         lancamento.setData(request.getData());
+        lancamento.setAlteradoPor(alteradoPor);
 
 
         return enriquecimentoService.converter(
@@ -162,7 +164,7 @@ public class LancamentoServiceImpl implements LancamentoService {
 
     @Override
     @Transactional
-    public void cancelar(Long id) {
+    public void cancelar(Long id, Long alteradoPor) {
 
         Lancamento lancamento =
                 repository.findById(id)
@@ -172,6 +174,7 @@ public class LancamentoServiceImpl implements LancamentoService {
 
 
         lancamento.setEstado(EstadoLancamento.CANCELADO);
+        lancamento.setAlteradoPor(alteradoPor);
 
         repository.save(lancamento);
     }

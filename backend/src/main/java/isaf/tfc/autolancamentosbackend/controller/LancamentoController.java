@@ -87,9 +87,10 @@ public class LancamentoController {
     @PutMapping("/{id}")
     public ResponseEntity<LancamentoResponseDTO> atualizar(
             @PathVariable Long id,
-            @RequestBody LancamentoRequestDTO request
+            @RequestBody LancamentoRequestDTO request,
+            @AuthenticationPrincipal User user
     ) {
-        return ResponseEntity.ok(service.atualizar(id, request));
+        return ResponseEntity.ok(service.atualizar(id, request, user.getId()));
     }
 
 
@@ -98,8 +99,8 @@ public class LancamentoController {
      */
     @PreAuthorize("hasRole('CONTABILISTA')")
     @PostMapping("/{id}/cancelar")
-    public ResponseEntity<Void> cancelar(@PathVariable Long id) {
-        service.cancelar(id);
+    public ResponseEntity<Void> cancelar(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        service.cancelar(id, user.getId());
         return ResponseEntity.noContent().build();
     }
 

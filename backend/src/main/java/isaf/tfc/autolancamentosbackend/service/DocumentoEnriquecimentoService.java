@@ -68,7 +68,8 @@ public class DocumentoEnriquecimentoService {
                 estadoDaSugestao(maisRecente),
                 maisRecente != null ? maisRecente.getTipoDocumento() : null,
                 maisRecente != null ? maisRecente.getNumeroDocumento() : null,
-                maisRecente != null ? maisRecente.getValor() : null
+                maisRecente != null ? maisRecente.getValor() : null,
+                maisRecente != null ? maisRecente.getValidacaoJson() : null
         );
     }
 

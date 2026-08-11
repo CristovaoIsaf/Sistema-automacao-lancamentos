@@ -13,11 +13,14 @@ import {
   Inbox,
   IdCard,
   X,
+  AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import { abrirDocumento, descarregarDocumento, exportarZipDocumentos, listarDocumentos } from '../api/documentoApi';
 import { obterDossieEntidade } from '../api/entidadeApi';
+import { parseValidacao } from '../components/ValidacaoDocumento';
 import type { Documento, EntidadeDossie } from '../types/documento';
 
 const TIPO_ENTIDADE_LABEL: Record<string, string> = {
@@ -45,6 +48,40 @@ function formatarTamanho(bytes?: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Fase 16 do plano de 20 fases ("auditor: inconsistências") — indicador
+// compacto por documento, reutilizando o mesmo parseValidacao já usado no
+// fluxo de upload (ValidacaoDocumento.tsx); aqui só a contagem, o detalhe
+// completo (mensagens) fica no title (tooltip) para não sobrecarregar a
+// linha da tabela.
+function BadgeInconsistencias({ validacaoJson }: { validacaoJson?: string | null }) {
+  const resultado = parseValidacao(validacaoJson);
+  if (!resultado || resultado.problemas.length === 0) return null;
+
+  const erros = resultado.problemas.filter(p => p.gravidade === 'erro');
+  const avisos = resultado.problemas.filter(p => p.gravidade === 'aviso');
+  const titulo = resultado.problemas.map(p => p.mensagem).join('\n');
+
+  if (erros.length > 0) {
+    return (
+      <span
+        title={titulo}
+        className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 bg-[#FEF2F2] text-[#DC2626]"
+      >
+        <AlertCircle size={11} /> {erros.length} erro{erros.length > 1 ? 's' : ''}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      title={titulo}
+      className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 bg-[#FFFBEB] text-[#D97706]"
+    >
+      <AlertTriangle size={11} /> {avisos.length} aviso{avisos.length > 1 ? 's' : ''}
+    </span>
+  );
 }
 
 export function Arquivo() {
@@ -285,6 +322,7 @@ export function Arquivo() {
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 ${estilo}`}>
                             {doc.estado ?? 'Pendente'}
                           </span>
+                          <BadgeInconsistencias validacaoJson={doc.validacaoJson} />
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               onClick={() => verDocumento(doc)}

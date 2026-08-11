@@ -1,9 +1,17 @@
 import { apiGet } from './client';
 import type { DashboardDados } from '../types/dashboard';
+import type { DashboardAdministrador } from '../types/dashboardAdmin';
 import type { Lancamento } from '../types/contabilidade';
 
 export async function obterDashboard(): Promise<DashboardDados> {
   return apiGet<DashboardDados>('/api/dashboard');
+}
+
+// Fase 15 do plano de 20 fases — dados exclusivos da visão de
+// Administrador (atividade por utilizador, pendências); o backend
+// rejeita com 403 se o perfil autenticado não for ADMINISTRADOR.
+export async function obterDashboardAdministrador(): Promise<DashboardAdministrador> {
+  return apiGet<DashboardAdministrador>('/api/dashboard/administrador');
 }
 
 export async function obterResumo(): Promise<DashboardDados['kpis']> {

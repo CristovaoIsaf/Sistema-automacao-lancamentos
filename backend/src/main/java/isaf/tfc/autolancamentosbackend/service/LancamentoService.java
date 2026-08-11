@@ -56,16 +56,19 @@ public interface LancamentoService {
 
 
     /**
-     * Atualiza um lançamento ainda não fechado.
+     * Atualiza um lançamento ainda não fechado. `alteradoPor` (Fase 16 —
+     * "auditor: alterações") é o utilizador autenticado que editou, para a
+     * auditoria conseguir atribuir a alteração a alguém.
      */
     LancamentoResponseDTO atualizar(
             Long id,
-            LancamentoRequestDTO request
+            LancamentoRequestDTO request,
+            Long alteradoPor
     );
 
 
     /**
-     * Cancela um lançamento contabilístico.
+     * Cancela um lançamento contabilístico. `alteradoPor` — ver atualizar().
      */
-    void cancelar(Long id);
+    void cancelar(Long id, Long alteradoPor);
 }

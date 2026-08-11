@@ -17,6 +17,10 @@ export interface Documento {
   valor?: string | null;
   tamanho?: number;
   estado?: 'Pendente' | 'Analisado' | 'Aprovado' | 'Rejeitado';
+  // Fase 16 do plano de 20 fases ("auditor: inconsistências") — mesmo JSON
+  // de Sugestao.validacaoJson, usar parseValidacao (ValidacaoDocumento.tsx).
+  // null se o documento ainda não foi analisado ou é anterior à Fase 3.
+  validacaoJson?: string | null;
 }
 
 // Espelha Entidade (backend) — Fase 10, GET /api/entidades.

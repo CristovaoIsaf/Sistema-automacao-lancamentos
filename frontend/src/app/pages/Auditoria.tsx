@@ -1,16 +1,8 @@
-import { ScrollText, Download } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ScrollText, Loader2, AlertCircle } from 'lucide-react';
 import type { LogAuditoria } from '../types/contabilidade';
 import { useAuth, permissoes } from '../auth/AuthContext';
-
-// Logs mock (UC010, RF017). Sem backend — dados estáticos de demonstração.
-const logsMock: LogAuditoria[] = [
-  { id: '1', utilizador: 'João Silva', perfil: 'CONTABILISTA', acao: 'Aprovou lançamento', entidade: 'LC-2026-0142', dataHora: '08/07/2026 09:52' },
-  { id: '2', utilizador: 'João Silva', perfil: 'CONTABILISTA', acao: 'Importou documento', entidade: 'FT 002/2026', dataHora: '08/07/2026 09:48' },
-  { id: '3', utilizador: 'Ana Ferreira', perfil: 'ADMINISTRADOR', acao: 'Criou utilizador', entidade: 'pedro.costa@empresa.ao', dataHora: '08/07/2026 09:30' },
-  { id: '4', utilizador: 'Maria Santos', perfil: 'CONTABILISTA', acao: 'Corrigiu sugestão da IA', entidade: 'FC 031/2026', dataHora: '07/07/2026 16:25' },
-  { id: '5', utilizador: 'Ana Ferreira', perfil: 'ADMINISTRADOR', acao: 'Alterou plano de contas', entidade: 'Conta 5.1.4', dataHora: '07/07/2026 14:10' },
-  { id: '6', utilizador: 'João Silva', perfil: 'CONTABILISTA', acao: 'Rejeitou lançamento', entidade: 'LC-2026-0139', dataHora: '07/07/2026 11:03' },
-];
+import { listarLogsAuditoria } from '../api/auditoriaApi';
 
 const perfilBadge: Record<string, string> = {
   ADMINISTRADOR: 'bg-[#FEF2F2] text-[#DC2626]',
@@ -18,8 +10,40 @@ const perfilBadge: Record<string, string> = {
   AUDITOR: 'bg-[#F8FAFC] text-[#64748B]',
 };
 
+function rotuloPerfil(perfil?: string | null): string {
+  if (!perfil) return '—';
+  return perfil.charAt(0) + perfil.slice(1).toLowerCase();
+}
+
 export function Auditoria() {
   const { perfil } = useAuth();
+  const [logs, setLogs] = useState<LogAuditoria[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  // Fase 15 do plano de 20 fases — antes desta fase, esta página mostrava
+  // sempre `logsMock` (6 registos de exemplo estáticos, nunca ligados a
+  // nenhum backend). Agora deriva-se de eventos reais já timestampados no
+  // sistema (uploads de documento, criação/aprovação de lançamentos — ver
+  // AuditoriaService no backend).
+  useEffect(() => {
+    if (!permissoes(perfil).podeVerLogs) return;
+    let cancelado = false;
+    setLoading(true);
+    setErro(null);
+
+    listarLogsAuditoria()
+      .then(dados => { if (!cancelado) setLogs(dados.itens); })
+      .catch(err => {
+        if (cancelado) return;
+        console.error('Erro ao carregar logs de auditoria:', err);
+        setErro('Não foi possível carregar os logs de auditoria.');
+      })
+      .finally(() => { if (!cancelado) setLoading(false); });
+
+    return () => { cancelado = true; };
+  }, [perfil]);
+
   // Acesso a logs: Administrador e Auditor (UC010)
   if (!permissoes(perfil).podeVerLogs) {
     return (
@@ -34,19 +58,14 @@ export function Auditoria() {
   return (
     <div className="space-y-4" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <ScrollText style={{ width: 18, height: 18 }} className="text-[#0F172A]" />
-            <h1 className="text-[18px] font-semibold text-[#0F172A]">Logs de Auditoria</h1>
-          </div>
-          <p className="text-[13px] text-[#64748B] mt-0.5">
-            Registo imutável das operações do sistema (UC010, RF017).
-          </p>
+      <div>
+        <div className="flex items-center gap-2">
+          <ScrollText style={{ width: 18, height: 18 }} className="text-[#0F172A]" />
+          <h1 className="text-[18px] font-semibold text-[#0F172A]">Logs de Auditoria</h1>
         </div>
-        <button className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors">
-          <Download style={{ width: 13, height: 13 }} /> Exportar
-        </button>
+        <p className="text-[13px] text-[#64748B] mt-0.5">
+          Registo de operações do sistema (UC010, RF017) — importação de documentos e criação/aprovação de lançamentos.
+        </p>
       </div>
 
       {/* Table */}
@@ -62,19 +81,41 @@ export function Auditoria() {
             </tr>
           </thead>
           <tbody>
-            {logsMock.map(log => (
-              <tr key={log.id} className="border-b border-[#F1F5F9] last:border-0 hover:bg-[#F8FAFC] transition-colors">
-                <td className="px-4 py-2.5 text-[13px] text-[#0F172A]">{log.utilizador}</td>
-                <td className="px-4 py-2.5">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${perfilBadge[log.perfil]}`}>
-                    {log.perfil.charAt(0) + log.perfil.slice(1).toLowerCase()}
-                  </span>
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                  <Loader2 className="animate-spin inline-block mr-2" size={14} /> A carregar...
                 </td>
-                <td className="px-4 py-2.5 text-[13px] text-[#475569]">{log.acao}</td>
-                <td className="px-4 py-2.5 text-[13px] text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{log.entidade}</td>
-                <td className="px-4 py-2.5 text-right text-[12px] text-[#64748B]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{log.dataHora}</td>
               </tr>
-            ))}
+            ) : erro ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#DC2626]">
+                  <AlertCircle className="inline-block mr-2" size={14} /> {erro}
+                </td>
+              </tr>
+            ) : logs.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                  Ainda não há eventos registados.
+                </td>
+              </tr>
+            ) : (
+              logs.map(log => (
+                <tr key={log.id} className="border-b border-[#F1F5F9] last:border-0 hover:bg-[#F8FAFC] transition-colors">
+                  <td className="px-4 py-2.5 text-[13px] text-[#0F172A]">{log.utilizador}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${(log.perfil && perfilBadge[log.perfil]) ?? 'bg-[#F1F5F9] text-[#475569]'}`}>
+                      {rotuloPerfil(log.perfil)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-[13px] text-[#475569]">{log.acao}</td>
+                  <td className="px-4 py-2.5 text-[13px] text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{log.entidade}</td>
+                  <td className="px-4 py-2.5 text-right text-[12px] text-[#64748B]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    {log.dataHora ? new Date(log.dataHora).toLocaleString('pt-AO') : '—'}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

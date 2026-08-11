@@ -44,4 +44,14 @@ public class DocumentoResponseDTO {
     private String numeroDocumento;
 
     private String valor;
+
+    // Fase 16 do plano de 20 fases ("auditor: inconsistências") — o
+    // ResultadoValidacao (motor determinístico, ver
+    // fastapi/app/services/document_validation.py) da Sugestao mais
+    // recente, tal e qual persistido em Sugestao.validacaoJson. Já existia
+    // no fluxo de upload (LancamentoDiario.tsx) mas nunca tinha sido
+    // exposto para consulta posterior — reutiliza o mesmo parseValidacao()
+    // do frontend, sem novo formato. null se o documento ainda não foi
+    // analisado ou a sugestão é anterior à Fase 3 (sem validação).
+    private String validacaoJson;
 }
