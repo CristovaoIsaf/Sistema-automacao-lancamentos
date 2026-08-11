@@ -53,6 +53,7 @@ const menuSections: { label: string; items: MenuItem[] }[] = [
       // de perfis que "Novo Documento" (RN010: Auditor não escreve).
       { path: '/lancamento-diario', label: 'Lançamento Manual', icon: NotebookPen },
       { path: '/balancetes', label: 'Balancetes', icon: Scale },
+      { path: '/livro-razao', label: 'Livro Razão', icon: BookOpen },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
       { path: '/notas-contas', label: 'Notas às Contas', icon: FileSignature },
       // Consulta de logs de auditoria (UC010) — Administrador e Auditor

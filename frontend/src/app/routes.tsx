@@ -13,6 +13,7 @@ import { Configuracoes } from "./pages/Configuracoes";
 import { UploadDocumentos } from "./pages/UploadDocumentos";
 import { Arquivo } from "./pages/Arquivo";
 import { Balancetes } from "./pages/Balancetes";
+import { LivroRazao } from "./pages/LivroRazao";
 import { ExportacaoSAFT } from "./pages/ExportacaoSAFT";
 import { Utilizadores } from "./pages/Utilizadores";
 import { Auditoria } from "./pages/Auditoria";
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
       { path: "lancamentos", element: <RotaProtegida><Lancamentos /></RotaProtegida> },
       { path: "lancamento-diario", element: <RotaProtegida><LancamentoDiario /></RotaProtegida> },
       { path: "balancetes", element: <RotaProtegida><Balancetes /></RotaProtegida> },
+      { path: "livro-razao", element: <RotaProtegida><LivroRazao /></RotaProtegida> },
       { path: "plano-contas", element: <RotaProtegida><PlanoContas /></RotaProtegida> },
       { path: "livros-fiscais", element: <RotaProtegida><LivrosFiscais /></RotaProtegida> },
       { path: "saft", element: <RotaProtegida><ExportacaoSAFT /></RotaProtegida> },
