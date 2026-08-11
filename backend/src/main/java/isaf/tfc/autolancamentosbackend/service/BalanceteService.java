@@ -38,13 +38,23 @@ public class BalanceteService {
         this.planoContasClient = planoContasClient;
     }
 
+    /**
+     * Fase 17 do plano de 20 fases — extraído de gerarBalancete() para ser
+     * reutilizado por FluxoCaixaService, que precisa dos Lancamento (não só
+     * do agregado por conta). Mesma fonte única, nunca reimplementada.
+     */
+    public List<Lancamento> lancamentosValidadosNoIntervalo(LocalDate inicio, LocalDate fim) {
+        return lancamentoRepository.findAll().stream()
+                .filter(l -> l.getEstado() == EstadoLancamento.VALIDADO)
+                .filter(l -> dentroDoIntervalo(l, inicio, fim))
+                .toList();
+    }
+
     public BalanceteResponseDTO gerarBalancete(LocalDate inicio, LocalDate fim) {
         Map<String, BigDecimal> debitosPorConta = new LinkedHashMap<>();
         Map<String, BigDecimal> creditosPorConta = new LinkedHashMap<>();
 
-        lancamentoRepository.findAll().stream()
-                .filter(l -> l.getEstado() == EstadoLancamento.VALIDADO)
-                .filter(l -> dentroDoIntervalo(l, inicio, fim))
+        lancamentosValidadosNoIntervalo(inicio, fim).stream()
                 .flatMap(l -> l.getLinhas().stream())
                 .forEach(linha -> acumular(linha, debitosPorConta, creditosPorConta));
 

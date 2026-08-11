@@ -1,5 +1,5 @@
 import { apiGet } from './client';
-import type { RelatorioBalanco, RelatorioDRE } from '../types/relatorio';
+import type { RelatorioBalanco, RelatorioDRE, RelatorioFluxoCaixa } from '../types/relatorio';
 
 // Fase 13 do plano de 20 fases — DRE/Balanço reais, construídos no
 // backend a partir do mesmo balancete usado em /balancetes (ver
@@ -21,4 +21,13 @@ export async function obterBalanco(inicio?: string, fim?: string): Promise<Relat
   if (fim) params.append('fim', fim);
   const qs = params.toString();
   return apiGet<RelatorioBalanco>(`/api/demonstracoes/balanco${qs ? `?${qs}` : ''}`);
+}
+
+// Fase 17 do plano de 20 fases — método direto, ver FluxoCaixaService.
+export async function obterFluxoCaixa(inicio?: string, fim?: string): Promise<RelatorioFluxoCaixa> {
+  const params = new URLSearchParams();
+  if (inicio) params.append('inicio', inicio);
+  if (fim) params.append('fim', fim);
+  const qs = params.toString();
+  return apiGet<RelatorioFluxoCaixa>(`/api/fluxo-caixa${qs ? `?${qs}` : ''}`);
 }
