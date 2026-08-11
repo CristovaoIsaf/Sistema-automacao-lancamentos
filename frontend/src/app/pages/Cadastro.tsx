@@ -2,17 +2,28 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../auth/AuthContext';
 
+// Fase 20 do plano de 20 fases — "registo público": antes desta fase este
+// formulário nunca chamava nenhum backend, só mostrava um toast de
+// sucesso falso e navegava para /login (POST /auth/registo não existia,
+// ver limitação documentada no README). Agora chama o endpoint real —
+// só funciona uma vez, para criar o primeiro Administrador desta
+// instalação (o backend devolve 409 depois disso, ver AuthController).
 export function Cadastro() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ empresa: '', nif: '', email: '', senha: '', confirmar: '' });
+  const { registar } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    nomeEmpresa: '', nifEmpresa: '', nome: '', nif: '', email: '', senha: '', confirmar: '',
+  });
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.empresa || !form.nif || !form.email || !form.senha) {
+    if (!form.nomeEmpresa || !form.nifEmpresa || !form.nome || !form.nif || !form.email || !form.senha) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
@@ -20,8 +31,28 @@ export function Cadastro() {
       toast.error('As senhas não coincidem');
       return;
     }
-    toast.success('Empresa registada. Já pode iniciar sessão como Administrador.');
-    navigate('/login');
+
+    setLoading(true);
+    try {
+      await registar({
+        nome: form.nome,
+        nif: form.nif,
+        email: form.email,
+        senha: form.senha,
+        nomeEmpresa: form.nomeEmpresa,
+        nifEmpresa: form.nifEmpresa,
+      });
+      toast.success('Conta criada. Sessão iniciada como Administrador.');
+      navigate('/');
+    } catch (erro) {
+      if (erro instanceof Error && erro.message.includes('409')) {
+        toast.error('Esta instalação já tem utilizadores. Peça a um Administrador para criar a sua conta em "Utilizadores".');
+      } else {
+        toast.error('Não foi possível concluir o registo.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,17 +69,20 @@ export function Cadastro() {
             </div>
             <p className="text-[13px] text-[#475569] mt-2">Registar empresa — PME angolana</p>
             <p className="text-[11px] text-[#94A3B8] mt-1">
-              Cria a empresa e a respetiva conta de Administrador. Utilizadores
-              adicionais (Contabilista, Auditor) são criados depois pelo
+              Só funciona uma vez: cria a empresa (se ainda não existir) e a
+              sua conta de Administrador. Depois disto, utilizadores
+              adicionais (Contabilista, Auditor) são criados pelo
               Administrador em "Utilizadores" (RN006).
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
             {[
-              { key: 'empresa', label: 'Nome da Empresa *', placeholder: 'Empresa Lda.', type: 'text', mono: false },
-              { key: 'nif', label: 'NIF da Empresa *', placeholder: '5000123456LA', type: 'text', mono: true },
-              { key: 'email', label: 'Email do Administrador *', placeholder: 'admin@empresa.ao', type: 'email', mono: false },
+              { key: 'nomeEmpresa', label: 'Nome da Empresa *', placeholder: 'Empresa Lda.', type: 'text', mono: false },
+              { key: 'nifEmpresa', label: 'NIF da Empresa *', placeholder: '5000123456LA', type: 'text', mono: true },
+              { key: 'nome', label: 'O seu nome *', placeholder: 'Nome completo', type: 'text', mono: false },
+              { key: 'nif', label: 'O seu NIF *', placeholder: '5000123456LA', type: 'text', mono: true },
+              { key: 'email', label: 'Email *', placeholder: 'admin@empresa.ao', type: 'email', mono: false },
               { key: 'senha', label: 'Senha *', placeholder: '••••••••', type: 'password', mono: false },
               { key: 'confirmar', label: 'Confirmar Senha *', placeholder: '••••••••', type: 'password', mono: false },
             ].map(f => (
@@ -67,9 +101,10 @@ export function Cadastro() {
 
             <button
               type="submit"
-              className="w-full h-8 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[13px] font-medium rounded-md transition-colors mt-2"
+              disabled={loading}
+              className="w-full h-8 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 disabled:cursor-not-allowed text-white text-[13px] font-medium rounded-md transition-colors mt-2"
             >
-              Registar Empresa
+              {loading ? 'A registar...' : 'Registar Empresa'}
             </button>
           </form>
 

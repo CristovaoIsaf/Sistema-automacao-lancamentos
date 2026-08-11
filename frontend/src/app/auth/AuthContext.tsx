@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import type { Perfil, Utilizador } from '../types/contabilidade';
 import { login as apiLogin } from '../api/authApi';
+import { registar as apiRegistar, type CadastroRequest } from '../api/cadastroApi';
 import { setToken } from '../api/client';
 
 // Contexto de "utilizador atual".
@@ -13,6 +14,7 @@ interface AuthContextValue {
   autenticado: boolean;
   setPerfil: (p: Perfil) => void;
   login: (email: string, password: string) => Promise<void>;
+  registar: (dados: CadastroRequest) => Promise<void>;
   logout: () => void;
 }
 
@@ -40,8 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const utilizador = utilizadorReal ?? UTILIZADORES_MOCK[perfil];
 
-  async function login(email: string, password: string) {
-    const resp = await apiLogin(email, password);
+  function aplicarSessao(resp: { token: string; nome: string; email: string; papel: string }) {
     setToken(resp.token);
     const p = resp.papel as Perfil;
     setPerfil(p);
@@ -52,6 +53,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAutenticado(true);
   }
 
+  async function login(email: string, password: string) {
+    aplicarSessao(await apiLogin(email, password));
+  }
+
+  // Fase 20 do plano de 20 fases — POST /auth/registo devolve a mesma
+  // forma de LoginResposta que o login (ver AuthController.registar), por
+  // isso a sessão é aplicada da mesma maneira — sem pedir login outra vez
+  // a seguir ao registo.
+  async function registar(dados: CadastroRequest) {
+    aplicarSessao(await apiRegistar(dados));
+  }
+
   function logout() {
     setToken(null);
     setUtilizadorReal(null);
@@ -59,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ utilizador, perfil, autenticado, setPerfil, login, logout }}>
+    <AuthContext.Provider value={{ utilizador, perfil, autenticado, setPerfil, login, registar, logout }}>
       {children}
     </AuthContext.Provider>
   );
