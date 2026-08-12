@@ -1,4 +1,4 @@
-import { apiGet, apiGetBlob, apiPost } from "./client";
+import { apiGet, apiGetBlob, apiPost, apiPut } from "./client";
 
 import type {
     LancamentoRequest,
@@ -22,6 +22,32 @@ export async function listarLancamentos(): Promise<LancamentoResponse[]> {
 
     return apiGet<LancamentoResponse[]>(
         "/api/lancamentos"
+    );
+
+}
+
+
+export async function buscarLancamento(id: number): Promise<LancamentoResponse> {
+
+    return apiGet<LancamentoResponse>(
+        `/api/lancamentos/${id}`
+    );
+
+}
+
+
+// LancamentoServiceImpl.atualizar persiste data/descrição e, se `linhas`
+// vier preenchido, substitui também as linhas de débito/crédito (revalida
+// o equilíbrio) — ver LancamentoDiario.tsx, que envia sempre o conjunto
+// completo de linhas ao editar um lançamento existente.
+export async function atualizarLancamento(
+    id: number,
+    dados: LancamentoRequest
+): Promise<LancamentoResponse> {
+
+    return apiPut<LancamentoResponse>(
+        `/api/lancamentos/${id}`,
+        dados
     );
 
 }

@@ -172,8 +172,12 @@ decreto original é anterior à introdução do IVA em Angola.
 
 ## Limitações conhecidas
 
-- Sem movimento de existências/CMVC — a Demonstração de Resultados trata
-  Compras como gasto do período inteiro, sem ajuste de stock.
+- Sem movimento de existências/CMVC — Compras (classe 2) aparece como
+  saldo no Balanço, não na Demonstração de Resultados, por não haver
+  como calcular o Custo das Mercadorias Vendidas sem controlo de stock.
+- Sem Imobilizado (classe 1 — Ativo Fixo) modelado: não há tipo de
+  documento "compra de imobilizado" nem aplicação de IVA dedutível a
+  essa operação.
 - Capital Próprio (Decreto 82/01, classe 5 — Capital/Reservas) está no
   Balanço, mas este sistema não tem fecho de exercício: o resultado do
   período fica sempre em Capital Próprio como "Resultado do Exercício"

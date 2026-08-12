@@ -3,6 +3,8 @@ import {
   Search,
   Download,
   Eye,
+  Pencil,
+  Check,
   ChevronDown,
   ChevronRight,
   FolderOpen,
@@ -18,9 +20,18 @@ import {
 } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
-import { abrirDocumento, descarregarDocumento, exportarZipDocumentos, listarDocumentos } from '../api/documentoApi';
+import {
+  abrirDocumento,
+  corrigirClassificacaoDocumento,
+  descarregarDocumento,
+  exportarZipDocumentos,
+  listarDocumentos,
+  renomearDocumento,
+} from '../api/documentoApi';
 import { obterDossieEntidade } from '../api/entidadeApi';
 import { parseValidacao } from '../components/ValidacaoDocumento';
+import { useAuth, permissoes } from '../auth/AuthContext';
+import { TIPO_DOCUMENTO_LABEL } from '../data/tiposDocumento';
 import type { Documento, EntidadeDossie } from '../types/documento';
 
 const TIPO_ENTIDADE_LABEL: Record<string, string> = {
@@ -84,8 +95,138 @@ function BadgeInconsistencias({ validacaoJson }: { validacaoJson?: string | null
   );
 }
 
+function EditarDocumentoDialog({ documento, onClose, onGuardado }: { documento: Documento | null; onClose: () => void; onGuardado: () => void }) {
+  const [nomeFicheiro, setNomeFicheiro] = useState('');
+  const [tipoDocumento, setTipoDocumento] = useState('');
+  const [numeroDocumento, setNumeroDocumento] = useState('');
+  const [valor, setValor] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (documento) {
+      setNomeFicheiro(documento.nomeFicheiro);
+      setTipoDocumento(documento.tipoDocumento ?? '');
+      setNumeroDocumento(documento.numeroDocumento ?? '');
+      setValor(documento.valor ?? '');
+    }
+  }, [documento]);
+
+  const jaAnalisado = documento != null && documento.estado !== 'Pendente';
+
+  const handleSave = async () => {
+    if (!documento) return;
+    if (!nomeFicheiro.trim()) {
+      toast.error('O nome do ficheiro não pode ficar vazio');
+      return;
+    }
+    try {
+      setSalvando(true);
+      if (nomeFicheiro.trim() !== documento.nomeFicheiro) {
+        await renomearDocumento(documento.id, nomeFicheiro.trim());
+      }
+      // Só há Sugestao (classificação) para corrigir depois de o documento
+      // ter sido analisado — ver DocumentoController.corrigirClassificacao.
+      if (jaAnalisado) {
+        await corrigirClassificacaoDocumento(documento.id, { tipoDocumento, numeroDocumento, valor });
+      }
+      toast.success('Documento atualizado com sucesso');
+      onGuardado();
+      onClose();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao atualizar documento');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open={!!documento} onOpenChange={v => !v && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/30 z-50" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-[480px] bg-white border border-[#E2E8F0] rounded-xl shadow-sm" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E2E8F0]">
+            <Dialog.Title className="text-[14px] font-semibold text-[#0F172A]">Editar Documento</Dialog.Title>
+            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
+              <X size={14} />
+            </button>
+          </div>
+
+          {documento && (
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Nome do ficheiro</label>
+                <input
+                  type="text"
+                  value={nomeFicheiro}
+                  onChange={e => setNomeFicheiro(e.target.value)}
+                  className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+                />
+              </div>
+
+              {jaAnalisado ? (
+                <>
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Tipo de documento</label>
+                    <select
+                      value={tipoDocumento}
+                      onChange={e => setTipoDocumento(e.target.value)}
+                      className="w-full h-8 px-2 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] transition-all"
+                    >
+                      <option value="">—</option>
+                      {Object.entries(TIPO_DOCUMENTO_LABEL).map(([valor, rotulo]) => (
+                        <option key={valor} value={valor}>{rotulo}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Nº Documento</label>
+                      <input
+                        type="text"
+                        value={numeroDocumento}
+                        onChange={e => setNumeroDocumento(e.target.value)}
+                        className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Valor</label>
+                      <input
+                        type="text"
+                        value={valor}
+                        onChange={e => setValor(e.target.value)}
+                        className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-[12px] text-[#94A3B8]">
+                  Este documento ainda não foi analisado — a classificação (tipo/número/valor) só fica disponível para corrigir depois da análise.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[#E2E8F0]">
+            <button onClick={onClose} className="h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors">
+              Cancelar
+            </button>
+            <button onClick={handleSave} disabled={salvando} className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[13px] font-medium rounded-md transition-colors disabled:opacity-50">
+              {salvando ? <Loader2 className="animate-spin" size={13} /> : <Check size={13} />} Guardar
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 export function Arquivo() {
+  const { perfil } = useAuth();
+  const podeEscrever = !permissoes(perfil).apenasLeitura; // RN010: Auditor não escreve
   const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [documentoEmEdicao, setDocumentoEmEdicao] = useState<Documento | null>(null);
   const [loading, setLoading] = useState(true);
   const [pesquisa, setPesquisa] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -339,6 +480,15 @@ export function Arquivo() {
                             >
                               <Download size={14} />
                             </button>
+                            {podeEscrever && (
+                              <button
+                                onClick={() => setDocumentoEmEdicao(doc)}
+                                title="Editar"
+                                className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[#475569] hover:bg-[#F1F5F9] hover:text-[#2563EB]"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -437,6 +587,8 @@ export function Arquivo() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      <EditarDocumentoDialog documento={documentoEmEdicao} onClose={() => setDocumentoEmEdicao(null)} onGuardado={carregar} />
     </div>
   );
 }

@@ -193,6 +193,33 @@ export async function apiPut<T>(
 
 
 
+export async function apiPatch<T>(
+  path: string,
+  body: unknown
+): Promise<T> {
+
+  const response = await fetch(
+    `${API_BASE}${path}`,
+    {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify(body)
+    }
+  );
+
+
+  if (!response.ok) {
+    throw new Error(
+      `Erro ${response.status}`
+    );
+  }
+
+
+  return response.json();
+}
+
+
+
 export async function apiDelete(
   path: string
 ): Promise<void> {

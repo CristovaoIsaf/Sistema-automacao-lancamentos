@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Plus, Trash2, CheckCircle2, AlertCircle, Loader2, Percent, LayoutGrid, History, Sparkles, FileText, Gauge } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
-import { criarLancamento, listarLancamentos } from '../api/lancamentoApi';
+import { atualizarLancamento, criarLancamento, listarLancamentos } from '../api/lancamentoApi';
 import { aprovarSugestao, rejeitarSugestao } from '../api/sugestaoApi';
 import { listarContas } from '../api/contaApi';
 import { listarCategoriasConta } from '../api/categoriaContaApi';
@@ -76,6 +76,19 @@ function valorTotalLancamento(l: LancamentoResponse): number {
   return l.linhas.reduce((soma, linha) => soma + Number(linha.debito ?? 0), 0);
 }
 
+// Converte as linhas já persistidas de um Lancamento (números) para o
+// formato de Linha do formulário (strings) — usado quando se chega aqui a
+// editar um lançamento existente (ver Lancamentos.tsx, botão "Editar").
+function linhasDoLancamentoParaLinhas(l: LancamentoResponse): Linha[] {
+  return l.linhas.map(linha => ({
+    id: crypto.randomUUID(),
+    conta: linha.conta ?? '',
+    descricao: linha.descricao ?? '',
+    debito: linha.debito ? String(linha.debito) : '',
+    credito: linha.credito ? String(linha.credito) : '',
+  }));
+}
+
 const ESTADO_BADGE: Record<string, { classe: string; label: string }> = {
   VALIDADO: { classe: 'bg-[#ECFDF5] text-[#059669]', label: 'Validado' },
   PENDENTE: { classe: 'bg-[#FFFBEB] text-[#D97706]', label: 'Pendente' },
@@ -91,17 +104,27 @@ type TipoIva = 'venda' | 'compra';
 
 export function LancamentoDiario() {
   const location = useLocation();
+  const navigate = useNavigate();
   const sugestaoRecebida = (location.state as { sugestao?: Sugestao } | null)?.sugestao ?? null;
+  // Vem de Lancamentos.tsx (Histórico) — botão "Editar" num lançamento já
+  // existente, em vez de uma Sugestao da IA por rever.
+  const lancamentoParaEditar = (location.state as { lancamentoParaEditar?: LancamentoResponse } | null)
+    ?.lancamentoParaEditar ?? null;
 
-  const [data, setData] = useState(hoje());
+  const [data, setData] = useState(lancamentoParaEditar?.data.slice(0, 10) ?? hoje());
   const [nfDoc, setNfDoc] = useState('');
   const [nif, setNif] = useState('');
   const [tipoDoc, setTipoDoc] = useState('Fatura');
-  const [historico, setHistorico] = useState(sugestaoRecebida?.descricao ?? '');
+  const [historico, setHistorico] = useState(lancamentoParaEditar?.descricao ?? sugestaoRecebida?.descricao ?? '');
   const [linhas, setLinhas] = useState<Linha[]>(() => {
+    if (lancamentoParaEditar) {
+      const linhasDoLancamento = linhasDoLancamentoParaLinhas(lancamentoParaEditar);
+      return linhasDoLancamento.length > 0 ? linhasDoLancamento : [novaLinha(), novaLinha()];
+    }
     const linhasDaSugestao = parseLinhasSugeridas(sugestaoRecebida?.linhasJson);
     return linhasDaSugestao.length > 0 ? linhasDaSugestao : [novaLinha(), novaLinha()];
   });
+  const [lancamentoEmEdicaoId] = useState<number | null>(lancamentoParaEditar?.id ?? null);
   const [aGuardar, setAGuardar] = useState(false);
   const [contas, setContas] = useState<ContaSimples[]>([]);
   const [categorias, setCategorias] = useState<CategoriaConta[]>([]);
@@ -243,6 +266,17 @@ export function LancamentoDiario() {
 
     setAGuardar(true);
     try {
+      if (lancamentoEmEdicaoId != null) {
+        await atualizarLancamento(lancamentoEmEdicaoId, {
+          data,
+          descricao: historico,
+          linhas: linhasParaEnvio(),
+        });
+        toast.success('Lançamento atualizado');
+        navigate('/lancamentos');
+        return;
+      }
+
       await criarLancamento({
         data,
         descricao: historico,
@@ -313,8 +347,14 @@ export function LancamentoDiario() {
   return (
     <div className="max-w-[900px] space-y-4">
       <div>
-        <h1 className="text-[18px] font-semibold text-[#0F172A]">Lançamento Diário</h1>
-        <p className="text-[13px] text-[#475569] mt-0.5">Registo manual · Método das partidas dobradas</p>
+        <h1 className="text-[18px] font-semibold text-[#0F172A]">
+          {lancamentoEmEdicaoId != null ? 'Editar Lançamento' : 'Lançamentos'}
+        </h1>
+        <p className="text-[13px] text-[#475569] mt-0.5">
+          {lancamentoEmEdicaoId != null
+            ? `A editar o lançamento #${lancamentoEmEdicaoId}`
+            : 'Registo manual · Método das partidas dobradas'}
+        </p>
       </div>
 
       {/* Fase 8 do plano de 20 fases — "visão operacional" pós-processamento
@@ -621,14 +661,16 @@ export function LancamentoDiario() {
                 className="flex items-center gap-1.5 h-8 px-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white text-[13px] font-medium rounded-md transition-colors"
               >
                 {aGuardar ? <Loader2 className="animate-spin" size={13} /> : null}
-                Registar Lançamento
+                {lancamentoEmEdicaoId != null ? 'Guardar Alterações' : 'Registar Lançamento'}
               </button>
-              <button
-                onClick={limparFormulario}
-                className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors"
-              >
-                Limpar
-              </button>
+              {lancamentoEmEdicaoId == null && (
+                <button
+                  onClick={limparFormulario}
+                  className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors"
+                >
+                  Limpar
+                </button>
+              )}
             </>
           )}
         </div>

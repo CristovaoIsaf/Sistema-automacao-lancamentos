@@ -7,12 +7,19 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface SugestaoRepository extends JpaRepository<Sugestao, Long> {
 
     // Um documento pode ter sido analisado mais do que uma vez (nova
     // tentativa, reanálise) — por isso é uma lista, não um resultado único.
     List<Sugestao> findAllByDocumentoId(Long documentoId);
+
+    // Mesma noção de "sugestão mais recente" que
+    // DocumentoEnriquecimentoService.sugestaoMaisRecente() usa para a
+    // listagem — reutilizada por PATCH /documentos/{id}/classificacao para
+    // saber qual Sugestao corrigir.
+    Optional<Sugestao> findTopByDocumentoIdOrderByDataCriacaoDesc(Long documentoId);
 
     // Fase 3 — Context Engine: histórico relevante de uma entidade (as
     // classificações mais recentes dos seus documentos), usado para

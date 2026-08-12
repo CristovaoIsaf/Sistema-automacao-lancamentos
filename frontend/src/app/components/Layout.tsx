@@ -23,7 +23,6 @@ import {
   FileSignature,
 } from 'lucide-react';
 import { useState } from 'react';
-import type { Perfil } from '../types/contabilidade';
 import { useAuth } from '../auth/AuthContext';
 import { PERFIS_POR_ROTA } from '../auth/permissoesRotas';
 
@@ -48,10 +47,10 @@ const menuSections: { label: string; items: MenuItem[] }[] = [
       // Arquivo organizado por entidade — só leitura, por isso o Auditor
       // também acede (RN010 só exclui a escrita de documentos ao Auditor).
       { path: '/documentos', label: 'Documentos', icon: FolderOpen },
-      { path: '/lancamentos', label: 'Lançamentos', icon: FileText },
+      { path: '/lancamentos', label: 'Histórico de Lançamentos', icon: FileText },
       // Registo manual de partidas dobradas — acto de escrita, mesma regra
       // de perfis que "Novo Documento" (RN010: Auditor não escreve).
-      { path: '/lancamento-diario', label: 'Lançamento Manual', icon: NotebookPen },
+      { path: '/lancamento-diario', label: 'Lançamentos', icon: NotebookPen },
       { path: '/balancetes', label: 'Balancetes', icon: Scale },
       { path: '/livro-razao', label: 'Livro Razão', icon: BookOpen },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
@@ -80,7 +79,7 @@ const menuSections: { label: string; items: MenuItem[] }[] = [
 
 export function Layout() {
   const location = useLocation();
-  const { utilizador, perfil, autenticado, setPerfil, logout } = useAuth();
+  const { utilizador, perfil, autenticado, logout } = useAuth();
   const navigate = useNavigate();
 
   if (!autenticado) {
@@ -189,19 +188,6 @@ export function Layout() {
                 <button onClick={handleLogout} className="text-[#64748B] hover:text-[#CBD5E1] transition-colors" title="Terminar sessão">
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
-              </div>
-              {/* Selector de teste de perfil (mock — sem backend). Permite validar o RBAC. */}
-              <div>
-                <label className="block text-[9px] uppercase tracking-wider text-[#475569] mb-1">Perfil (teste)</label>
-                <select
-                  value={perfil}
-                  onChange={e => setPerfil(e.target.value as Perfil)}
-                  className="w-full h-7 px-2 text-[11px] bg-[#1E293B] text-[#CBD5E1] border border-[#334155] rounded focus:outline-none"
-                >
-                  <option value="ADMINISTRADOR">Administrador</option>
-                  <option value="CONTABILISTA">Contabilista</option>
-                  <option value="AUDITOR">Auditor</option>
-                </select>
               </div>
             </div>
           )}

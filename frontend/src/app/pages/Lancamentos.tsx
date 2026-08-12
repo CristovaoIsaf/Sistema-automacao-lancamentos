@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Search, Download, Eye, Edit2, Plus, CheckCircle2, Clock, XCircle, X, Check, Loader2 } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -175,8 +176,86 @@ function NovoLancamentoDialog({ open, onClose, onCriado, contas }: { open: boole
   );
 }
 
+function VerLancamentoDialog({ lancamento, onClose }: { lancamento: LancamentoResponse | null; onClose: () => void }) {
+  return (
+    <Dialog.Root open={!!lancamento} onOpenChange={v => !v && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/30 z-50" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-[480px] bg-white border border-[#E2E8F0] rounded-xl shadow-sm" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E2E8F0]">
+            <Dialog.Title className="text-[14px] font-semibold text-[#0F172A]">Detalhe do Lançamento</Dialog.Title>
+            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
+              <X style={{ width: 14, height: 14 }} />
+            </button>
+          </div>
+
+          {lancamento && (
+            <div className="p-5 space-y-3 text-[13px]">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Data</p>
+                  <p className="text-[#0F172A]">{new Date(lancamento.data).toLocaleDateString('pt-AO')}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Estado</p>
+                  <Badge variant={(estadoBadge[lancamento.estado] ?? { variant: 'pendente' as const }).variant}>
+                    {(estadoBadge[lancamento.estado] ?? { label: lancamento.estado }).label}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-[#475569] mb-1">Histórico</p>
+                <p className="text-[#0F172A]">{lancamento.descricao}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Conta Débito</p>
+                  <p className="text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{contaDebito(lancamento)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Conta Crédito</p>
+                  <p className="text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{contaCredito(lancamento)}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-[#475569] mb-1">Valor</p>
+                <p className="text-[#0F172A] font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatarKwanza(valorTotal(lancamento))}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Origem</p>
+                  <p className="text-[#0F172A]">{lancamento.origem === 'AUTOMATICO' ? 'IA' : 'Manual'}</p>
+                </div>
+                {lancamento.entidadeNome && (
+                  <div>
+                    <p className="text-[11px] font-medium text-[#475569] mb-1">Entidade</p>
+                    <p className="text-[#0F172A]">{lancamento.entidadeNome}</p>
+                  </div>
+                )}
+              </div>
+              {lancamento.validadoPorNome && (
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Validado por</p>
+                  <p className="text-[#0F172A]">{lancamento.validadoPorNome}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[#E2E8F0]">
+            <button onClick={onClose} className="h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors">
+              Fechar
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 export function Lancamentos() {
   const { perfil } = useAuth();
+  const navigate = useNavigate();
   const podeEscrever = permissoes(perfil).podeEscreverLancamentos; // RN010: Auditor não escreve
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
@@ -184,6 +263,7 @@ export function Lancamentos() {
   const [contaFilter, setContaFilter] = useState('');
   const [utilizadorFilter, setUtilizadorFilter] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [lancamentoEmVisualizacao, setLancamentoEmVisualizacao] = useState<LancamentoResponse | null>(null);
   const [lancamentos, setLancamentos] = useState<LancamentoResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -436,11 +516,15 @@ export function Lancamentos() {
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button title="Ver" className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
+                      <button onClick={() => setLancamentoEmVisualizacao(l)} title="Ver" className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
                         <Eye style={{ width: 13, height: 13 }} />
                       </button>
                       {podeEscrever && (
-                        <button title="Editar" className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
+                        <button
+                          onClick={() => navigate('/lancamento-diario', { state: { lancamentoParaEditar: l } })}
+                          title="Editar"
+                          className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors"
+                        >
                           <Edit2 style={{ width: 13, height: 13 }} />
                         </button>
                       )}
@@ -459,6 +543,7 @@ export function Lancamentos() {
       </div>
 
       <NovoLancamentoDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onCriado={carregar} contas={contas} />
+      <VerLancamentoDialog lancamento={lancamentoEmVisualizacao} onClose={() => setLancamentoEmVisualizacao(null)} />
     </div>
   );
 }

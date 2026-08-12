@@ -1,4 +1,4 @@
-import { apiGet, apiGetBlob, getToken } from './client';
+import { apiGet, apiGetBlob, apiPatch, getToken } from './client';
 import type { Documento, UploadDocumentoResponse } from '../types/documento';
 
 const API_BASE =
@@ -30,6 +30,22 @@ export async function uploadDocumento(file: File): Promise<UploadDocumentoRespon
   }
 
   return response.json();
+}
+
+// Corrige o nome do ficheiro no arquivo (ex: renomear "IMG_2049.jpg" para
+// algo pesquisável) — não altera o ficheiro em si, só o rótulo.
+export async function renomearDocumento(id: number, nomeFicheiro: string): Promise<Documento> {
+  return apiPatch<Documento>(`/documentos/${id}/nome`, { nomeFicheiro });
+}
+
+// Corrige tipo/número/valor da classificação (Sugestao mais recente) deste
+// documento, para quando a IA/regras classificaram mal. Campos omitidos
+// (undefined) ficam inalterados no backend.
+export async function corrigirClassificacaoDocumento(
+  id: number,
+  dados: { tipoDocumento?: string; numeroDocumento?: string; valor?: string }
+): Promise<Documento> {
+  return apiPatch<Documento>(`/documentos/${id}/classificacao`, dados);
 }
 
 function descarregarBlob(blob: Blob, nomeFicheiro: string) {

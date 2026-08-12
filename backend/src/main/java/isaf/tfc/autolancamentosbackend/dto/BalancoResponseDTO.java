@@ -10,12 +10,13 @@ import java.util.List;
 
 /**
  * Balanço (Fase 13 do plano de 20 fases, Capital Próprio adicionado na
- * Fase 19) — restrito às contas de Terceiros (classe 3), Meios monetários
- * (classe 4) e Capital e Reservas (classe 5, Fase 19), ver
+ * Fase 19) — restrito às contas de Existências (classe 2 — Compras/
+ * Mercadorias), Terceiros (classe 3), Meios monetários (classe 4) e
+ * Capital e Reservas (classe 5, Fase 19), ver
  * DemonstracoesFinanceirasService.gerarBalanco. Este PGC-AO reduzido (ver
- * pgc.py) ainda não modela Ativo Não Corrente — por isso `totalAtivo` e
- * `totalPassivo + totalCapitalProprio` NÃO fecham necessariamente ao mesmo
- * valor (ver `diferenca`).
+ * pgc.py) ainda não modela Ativo Não Corrente (Imobilizado) — por isso
+ * `totalAtivo` e `totalPassivo + totalCapitalProprio` NÃO fecham
+ * necessariamente ao mesmo valor (ver `diferenca`).
  *
  * `resultadoExercicio` dentro de `capitalProprio` não é uma conta lançada
  * — é o resultado líquido do MESMO período, obtido da DRE (nunca

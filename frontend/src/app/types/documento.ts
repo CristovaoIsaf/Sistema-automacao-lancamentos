@@ -66,6 +66,9 @@ export interface Sugestao {
   categoriaContabil: string;
   categoria?: string | null;
   valor: string;
+  // Série+número da fatura (ex. "FT 2026/001") — ver Sugestao.numeroDocumento
+  // no backend. Corrigível via PATCH /documentos/{id}/classificacao.
+  numeroDocumento?: string | null;
   entidade?: string | null;
   nif?: string | null;
   descricao: string;

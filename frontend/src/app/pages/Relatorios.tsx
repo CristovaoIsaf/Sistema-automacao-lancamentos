@@ -136,7 +136,8 @@ export function Relatorios() {
             <div className="px-4 py-3 border-b border-[#E2E8F0]">
               <h2 className="text-[13px] font-semibold text-[#0F172A]">Demonstração de Resultados por Exercício</h2>
               <p className="text-[11px] text-[#94A3B8] mt-0.5">
-                Compras (21) tratadas como gasto do período — este sistema não modela existências/CMVC.
+                Proveitos (classe 6) e Custos (classe 7). Compras (classe 2 — Existências) não entra
+                aqui — aparece no Balanço, porque este sistema não modela existências/CMVC.
               </p>
             </div>
             <table className="w-full">
@@ -188,7 +189,7 @@ export function Relatorios() {
       ) : activeTab === 'balanco' && balanco ? (
         <div className="space-y-4">
           <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-2.5 text-[12px] text-[#92400E]">
-            Ativo cobre Terceiros e Meios monetários; Capital Próprio cobre Capital e Reservas (Decreto 82/01, classe 5) mais o Resultado do Exercício (reaproveitado da DRE — este sistema não tem fecho de exercício, por isso o resultado do período fica sempre "pendente de aplicação"). O plano de contas deste TFC (âmbito reduzido) ainda não modela Ativo Não Corrente, por isso o Balanço pode não fechar exatamente a zero.
+            Ativo cobre Existências, Terceiros e Meios monetários; Capital Próprio cobre Capital e Reservas (Decreto 82/01, classe 5) mais o Resultado do Exercício (reaproveitado da DRE — este sistema não tem fecho de exercício, por isso o resultado do período fica sempre "pendente de aplicação"). O plano de contas deste TFC (âmbito reduzido) ainda não modela Ativo Não Corrente (Imobilizado), por isso o Balanço pode não fechar exatamente a zero.
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

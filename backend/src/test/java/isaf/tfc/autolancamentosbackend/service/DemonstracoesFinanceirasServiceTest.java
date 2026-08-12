@@ -55,6 +55,8 @@ class DemonstracoesFinanceirasServiceTest {
         BalanceteResponseDTO balancete = new BalanceteResponseDTO(
                 List.of(
                         linha("61", "Vendas", BigDecimal.ZERO, new BigDecimal("100000.00"), BigDecimal.ZERO, new BigDecimal("100000.00")),
+                        // Compras (classe 2) — Ativo, não Custo, nunca deve aparecer na
+                        // DRE (ver CLASSES_BALANCO no serviço); aparece só no Balanço.
                         linha("21", "Compras", new BigDecimal("40000.00"), BigDecimal.ZERO, new BigDecimal("40000.00"), BigDecimal.ZERO),
                         linha("75.2.21", "Rendas e alugueres", new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("10000.00"), BigDecimal.ZERO),
                         // Conta de balanço (classe 4) — nunca deve aparecer na DRE.
@@ -71,10 +73,10 @@ class DemonstracoesFinanceirasServiceTest {
         assertThat(dre.getReceitas().get(0).getConta()).isEqualTo("61");
         assertThat(dre.getTotalReceitas()).isEqualByComparingTo("100000.00");
 
-        assertThat(dre.getGastos()).extracting(l -> l.getConta()).containsExactlyInAnyOrder("21", "75.2.21");
-        assertThat(dre.getTotalGastos()).isEqualByComparingTo("50000.00");
+        assertThat(dre.getGastos()).extracting(l -> l.getConta()).containsExactly("75.2.21");
+        assertThat(dre.getTotalGastos()).isEqualByComparingTo("10000.00");
 
-        assertThat(dre.getResultadoLiquido()).isEqualByComparingTo("50000.00");
+        assertThat(dre.getResultadoLiquido()).isEqualByComparingTo("90000.00");
     }
 
     @Test
@@ -85,8 +87,9 @@ class DemonstracoesFinanceirasServiceTest {
                         linha("45", "Caixa", new BigDecimal("20000.00"), BigDecimal.ZERO, new BigDecimal("20000.00"), BigDecimal.ZERO),
                         linha("32", "Fornecedores", BigDecimal.ZERO, new BigDecimal("15000.00"), BigDecimal.ZERO, new BigDecimal("15000.00")),
                         linha("34.5.2", "IVA liquidado", BigDecimal.ZERO, new BigDecimal("5000.00"), BigDecimal.ZERO, new BigDecimal("5000.00")),
-                        // Contas de resultados (classe 2/6/7) — já representadas na
-                        // DRE, nunca devem ser contadas outra vez aqui.
+                        // Contas de resultados (classe 6/7) — já representadas na DRE,
+                        // nunca devem ser contadas outra vez aqui. Compras (classe 2) é
+                        // Ativo, por isso ENTRA no Balanço (ver CLASSES_BALANCO).
                         linha("61", "Vendas", BigDecimal.ZERO, new BigDecimal("100000.00"), BigDecimal.ZERO, new BigDecimal("100000.00")),
                         linha("21", "Compras", new BigDecimal("40000.00"), BigDecimal.ZERO, new BigDecimal("40000.00"), BigDecimal.ZERO)
                 ),
@@ -97,20 +100,24 @@ class DemonstracoesFinanceirasServiceTest {
 
         BalancoResponseDTO balanco = service.gerarBalanco(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
 
-        assertThat(balanco.getAtivo()).extracting(l -> l.getConta()).containsExactlyInAnyOrder("31", "45");
-        assertThat(balanco.getTotalAtivo()).isEqualByComparingTo("50000.00");
+        assertThat(balanco.getAtivo()).extracting(l -> l.getConta()).containsExactlyInAnyOrder("31", "45", "21");
+        assertThat(balanco.getTotalAtivo()).isEqualByComparingTo("90000.00");
 
         assertThat(balanco.getPassivo()).extracting(l -> l.getConta()).containsExactlyInAnyOrder("32", "34.5.2");
         assertThat(balanco.getTotalPassivo()).isEqualByComparingTo("20000.00");
 
         // Resultado do período (Fase 19) reaproveitado da DRE: Vendas
-        // (100000) - Compras (40000) = 60000, entra em Capital Próprio
-        // como "88 — Resultado do Exercício" (nenhuma conta de classe 5
-        // lançada neste balancete).
+        // (100000) - Gastos (0, Compras já não conta como gasto) = 100000,
+        // entra em Capital Próprio como "88 — Resultado do Exercício"
+        // (nenhuma conta de classe 5 lançada neste balancete).
         assertThat(balanco.getCapitalProprio()).extracting(l -> l.getConta()).containsExactly("88");
-        assertThat(balanco.getTotalCapitalProprio()).isEqualByComparingTo("60000.00");
+        assertThat(balanco.getTotalCapitalProprio()).isEqualByComparingTo("100000.00");
 
-        // 50000 (ativo) - (20000 (passivo) + 60000 (capital próprio)) = -30000
+        // 90000 (ativo, agora com Compras) - (20000 (passivo) + 100000
+        // (capital próprio, agora sem o gasto de Compras a reduzi-lo)) =
+        // -30000 — mesmo valor de antes da correção: mover Compras do
+        // "gasto" para o "ativo" desloca o mesmo montante (40000) dos dois
+        // lados da equação, não muda a diferença.
         assertThat(balanco.getDiferenca()).isEqualByComparingTo("-30000.00");
     }
 
@@ -134,10 +141,12 @@ class DemonstracoesFinanceirasServiceTest {
         var capital = balanco.getCapitalProprio().stream().filter(l -> l.getConta().equals("51")).findFirst().orElseThrow();
         assertThat(capital.getValor()).isEqualByComparingTo("100000.00");
         var resultado = balanco.getCapitalProprio().stream().filter(l -> l.getConta().equals("88")).findFirst().orElseThrow();
-        assertThat(resultado.getValor()).isEqualByComparingTo("50000.00");
-        assertThat(balanco.getTotalCapitalProprio()).isEqualByComparingTo("150000.00");
+        // Vendas (60000) - Gastos (0, Compras já não conta como gasto) = 60000.
+        assertThat(resultado.getValor()).isEqualByComparingTo("60000.00");
+        assertThat(balanco.getTotalCapitalProprio()).isEqualByComparingTo("160000.00");
 
-        // 150000 (Caixa) - (0 (passivo) + 150000 (capital próprio)) = 0 — fecha a zero.
+        // Ativo = Caixa (150000) + Compras (10000, agora no Balanço) = 160000.
+        // 160000 (ativo) - (0 (passivo) + 160000 (capital próprio)) = 0 — fecha a zero.
         assertThat(balanco.getDiferenca()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 

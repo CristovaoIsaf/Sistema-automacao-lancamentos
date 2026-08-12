@@ -37,20 +37,23 @@ public class DemonstracoesFinanceirasService {
     // Classe 6 (Proveitos) — ver pgc.py.
     private static final Set<String> CLASSES_RECEITA = Set.of("6");
 
-    // Classe 7 (Custos) + classe 2 (Existências — só a conta Compras/21 é
-    // realmente usada pelos lançamentos automáticos, ver pgc_ao.
-    // construir_lancamento). Tratada como gasto do período inteiro: este
-    // TFC não modela stock/CMVC, por isso não há como separar "vendido"
-    // de "em armazém" — decisão explícita, documentada também no DTO.
-    private static final Set<String> CLASSES_GASTO = Set.of("7", "2");
+    // Classe 7 (Custos) só — classe 2 (Existências/Compras) saiu da DRE,
+    // ver CLASSES_BALANCO abaixo. Antes desta correção, Compras (21) era
+    // tratada como gasto do período inteiro por não haver controlo de
+    // stock/CMVC — mas classe 2 é Existências (Ativo), não Custos, e
+    // misturá-la na DRE contraria a regra "activo/passivo só entra no
+    // Balanço" (o mesmo TFC não modela CMVC, então mostrar Compras no
+    // Balanço, sem ajuste de stock, é a aproximação menos errada das duas).
+    private static final Set<String> CLASSES_GASTO = Set.of("7");
 
-    // Classe 3 (Terceiros: Clientes/Fornecedores/Estado) + classe 4 (Meios
-    // monetários: Caixa/Depósitos) — as duas classes de Passivo/Ativo
-    // deste PGC-AO reduzido. Excluir classes 2/6/7 do Balanço evita contar
-    // o MESMO valor duas vezes (uma na DRE como gasto/receita do período,
-    // outra aqui como "saldo" — este sistema não tem fecho de exercício/
-    // encerramento de contas de resultados que evite essa sobreposição).
-    private static final Set<String> CLASSES_BALANCO = Set.of("3", "4");
+    // Classe 2 (Existências: Compras/Mercadorias) + classe 3 (Terceiros:
+    // Clientes/Fornecedores/Estado) + classe 4 (Meios monetários: Caixa/
+    // Depósitos) — classes de Ativo/Passivo deste PGC-AO reduzido. Excluir
+    // 5/6/7 do Balanço evita contar o MESMO valor duas vezes (uma na DRE/
+    // Capital Próprio como gasto/receita/capital do período, outra aqui
+    // como "saldo" — este sistema não tem fecho de exercício que evite
+    // essa sobreposição).
+    private static final Set<String> CLASSES_BALANCO = Set.of("2", "3", "4");
 
     // Classe 5 — Capital e Reservas (Fase 19 do plano de 20 fases).
     // Separada de CLASSES_BALANCO porque entra numa secção própria

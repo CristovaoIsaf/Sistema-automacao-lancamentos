@@ -4,15 +4,15 @@ import { login as apiLogin } from '../api/authApi';
 import { registar as apiRegistar, type CadastroRequest } from '../api/cadastroApi';
 import { setToken } from '../api/client';
 
-// Contexto de "utilizador atual".
-// Suporta login real contra o backend (POST /auth/login) e um selector de teste
-// para demonstrar o controlo de acesso sem backend (RN002, RN006, RN010).
+// Contexto de "utilizador atual". O perfil vem sempre do backend (JWT
+// devolvido por POST /auth/login ou /auth/registo) — não é escolhido pelo
+// cliente, para que o RBAC do frontend não possa ser contornado trocando
+// de perfil localmente.
 
 interface AuthContextValue {
   utilizador: Utilizador;
   perfil: Perfil;
   autenticado: boolean;
-  setPerfil: (p: Perfil) => void;
   login: (email: string, password: string) => Promise<void>;
   registar: (dados: CadastroRequest) => Promise<void>;
   logout: () => void;
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ utilizador, perfil, autenticado, setPerfil, login, registar, logout }}>
+    <AuthContext.Provider value={{ utilizador, perfil, autenticado, login, registar, logout }}>
       {children}
     </AuthContext.Provider>
   );

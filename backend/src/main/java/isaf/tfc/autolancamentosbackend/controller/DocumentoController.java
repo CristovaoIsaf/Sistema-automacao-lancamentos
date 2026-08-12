@@ -1,6 +1,8 @@
 package isaf.tfc.autolancamentosbackend.controller;
 
+import isaf.tfc.autolancamentosbackend.dto.CorrigirClassificacaoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.DocumentoResponseDTO;
+import isaf.tfc.autolancamentosbackend.dto.RenomearDocumentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.model.DocumentoContabilistico;
 import isaf.tfc.autolancamentosbackend.model.Entidade;
 import isaf.tfc.autolancamentosbackend.model.Lancamento;
@@ -187,6 +189,69 @@ public class DocumentoController {
         return documentoRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Renomeia o ficheiro no arquivo — o nome original do upload nem
+     * sempre é útil para encontrar o documento depois (ex: "IMG_2049.jpg").
+     */
+    // RN010: escrita fica fora do Auditor, mesma regra do upload.
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CONTABILISTA')")
+    @PatchMapping("/{id}/nome")
+    @Transactional
+    public ResponseEntity<DocumentoResponseDTO> renomear(
+            @PathVariable Long id,
+            @RequestBody RenomearDocumentoRequestDTO request
+    ) {
+        if (request.getNomeFicheiro() == null || request.getNomeFicheiro().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        DocumentoContabilistico documento = documentoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Documento não encontrado"));
+
+        documento.setNomeFicheiro(request.getNomeFicheiro().trim());
+        documentoRepository.save(documento);
+
+        return ResponseEntity.ok(enriquecimentoService.converter(documento));
+    }
+
+    /**
+     * Corrige o tipo/número/valor da Sugestao mais recente ligada ao
+     * documento — para quando a classificação automática (regras/IA)
+     * ficou errada. Não mexe em nenhum Lancamento já criado a partir desta
+     * Sugestao (se a análise já tiver sido aprovada): isto corrige o
+     * rótulo mostrado no arquivo, não reabre partidas dobradas já
+     * lançadas — essas continuam a editar-se em Lancamentos (PUT
+     * /api/lancamentos/{id}).
+     */
+    // RN010: escrita fica fora do Auditor, mesma regra do upload.
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CONTABILISTA')")
+    @PatchMapping("/{id}/classificacao")
+    @Transactional
+    public ResponseEntity<DocumentoResponseDTO> corrigirClassificacao(
+            @PathVariable Long id,
+            @RequestBody CorrigirClassificacaoRequestDTO request
+    ) {
+        DocumentoContabilistico documento = documentoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Documento não encontrado"));
+
+        Sugestao maisRecente = sugestaoRepository.findTopByDocumentoIdOrderByDataCriacaoDesc(id)
+                .orElseThrow(() -> new RuntimeException(
+                        "Este documento ainda não foi analisado — não há classificação para corrigir"));
+
+        if (request.getTipoDocumento() != null) {
+            maisRecente.setTipoDocumento(request.getTipoDocumento());
+        }
+        if (request.getNumeroDocumento() != null) {
+            maisRecente.setNumeroDocumento(request.getNumeroDocumento());
+        }
+        if (request.getValor() != null) {
+            maisRecente.setValor(request.getValor());
+        }
+        sugestaoRepository.save(maisRecente);
+
+        return ResponseEntity.ok(enriquecimentoService.converter(documento));
     }
 
     /**

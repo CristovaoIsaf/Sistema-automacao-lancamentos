@@ -150,11 +150,36 @@ public class LancamentoServiceImpl implements LancamentoService {
                                 new RuntimeException("Lançamento não encontrado")
                         );
 
+        if (lancamento.getEstado() == EstadoLancamento.CANCELADO) {
+            throw new RuntimeException("Não é possível editar um lançamento cancelado");
+        }
 
         lancamento.setDescricao(request.getDescricao());
         lancamento.setData(request.getData());
         lancamento.setAlteradoPor(alteradoPor);
 
+        // Substitui as linhas de débito/crédito quando o pedido as traz —
+        // antes desta alteração este método ignorava-as silenciosamente
+        // (o formulário de edição no frontend mostrava as contas como
+        // só-leitura por causa disso). O ecrã de edição (LancamentoDiario)
+        // envia sempre as linhas completas, nunca um subconjunto parcial.
+        if (request.getLinhas() != null && !request.getLinhas().isEmpty()) {
+            List<LinhaLancamento> novasLinhas =
+                    PartidasDobradas.construirLinhas(request.getLinhas(), request.getDescricao());
+            PartidasDobradas.validarEquilibrio(novasLinhas);
+
+            lancamento.getLinhas().clear();
+            novasLinhas.forEach(linha -> {
+                linha.setLancamento(lancamento);
+                lancamento.getLinhas().add(linha);
+            });
+
+            // Mesma semântica já usada em aprovarSugestao — só faz sentido
+            // para origem AUTOMATICO (ver comentário em Lancamento.editadoManualmente).
+            if (lancamento.getOrigem() == OrigemLancamento.AUTOMATICO) {
+                lancamento.setEditadoManualmente(true);
+            }
+        }
 
         return enriquecimentoService.converter(
                 repository.save(lancamento)
