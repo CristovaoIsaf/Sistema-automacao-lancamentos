@@ -56,7 +56,7 @@ services:
       - key: FASTAPI_SERVICES_URL
         value: https://auto-lancamentos-fastapi.onrender.com/api/v1
       - key: ALLOWED_ORIGIN
-        value: https://auto-lancamentos-frontend.onrender.com
+        value: https://auto-lancamentos-frontend.onrender.com,https://sistema-automacao-lancamentos.vercel.app
 
   - name: auto-lancamentos-frontend
     type: web
