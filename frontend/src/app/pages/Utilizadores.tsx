@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Plus, Edit2, Shield, User, UserCog, X, Check, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Shield, User, UserCog, UserCheck, UserX, X, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as Dialog from '@radix-ui/react-dialog';
 import type { Perfil, Utilizador } from '../types/contabilidade';
 import { useAuth, permissoes } from '../auth/AuthContext';
-import { criarUtilizador, listarUtilizadores } from '../api/utilizadorApi';
+import { alternarEstadoUtilizador, criarUtilizador, listarUtilizadores } from '../api/utilizadorApi';
 
 // Taxonomia alinhada ao TFC: exactamente 3 perfis (Administrador, Contabilista, Auditor).
 type Role = Perfil;
@@ -105,6 +105,7 @@ export function Utilizadores() {
   const [utilizadores, setUtilizadores] = useState<Utilizador[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [alternandoId, setAlternandoId] = useState<string | null>(null);
 
   const carregar = async () => {
     try {
@@ -122,6 +123,25 @@ export function Utilizadores() {
   useEffect(() => {
     carregar();
   }, []);
+
+  // Auditoria C09 — suspender/reativar um utilizador sem o eliminar
+  // fisicamente (o único modo que existia antes desta correção, ver
+  // UserController.apagar): mantém o histórico de auditoria associado a
+  // ele intacto (ver AuditoriaService — apagar fisicamente fazia esse
+  // histórico mostrar "Utilizador desconhecido").
+  const alternarEstado = async (u: Utilizador) => {
+    try {
+      setAlternandoId(u.id);
+      await alternarEstadoUtilizador(u);
+      toast.success(u.ativo ? 'Utilizador desativado' : 'Utilizador ativado');
+      await carregar();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao alterar o estado do utilizador');
+    } finally {
+      setAlternandoId(null);
+    }
+  };
 
   const filtered = utilizadores.filter(u =>
     u.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -226,9 +246,25 @@ export function Utilizadores() {
                     </td>
                     <td className="px-4 py-2.5">
                       {podeGerir && (
-                        <button className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
-                          <Edit2 style={{ width: 13, height: 13 }} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
+                            <Edit2 style={{ width: 13, height: 13 }} />
+                          </button>
+                          <button
+                            onClick={() => alternarEstado(u)}
+                            disabled={alternandoId === u.id}
+                            title={u.ativo ? 'Desativar utilizador' : 'Ativar utilizador'}
+                            className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors disabled:opacity-50"
+                          >
+                            {alternandoId === u.id ? (
+                              <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} />
+                            ) : u.ativo ? (
+                              <UserX style={{ width: 13, height: 13 }} />
+                            ) : (
+                              <UserCheck style={{ width: 13, height: 13 }} />
+                            )}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

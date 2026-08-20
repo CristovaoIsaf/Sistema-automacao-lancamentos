@@ -1,6 +1,7 @@
 package isaf.tfc.autolancamentosbackend.service;
 
 import isaf.tfc.autolancamentosbackend.dto.AprovarSugestaoRequest;
+import isaf.tfc.autolancamentosbackend.dto.ContaDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
@@ -36,12 +37,17 @@ class AnaliseContabilServiceTest {
 
     private SugestaoRepository sugestaoRepository;
     private LancamentoRepository lancamentoRepository;
+    private PlanoContasClient planoContasClient;
     private AnaliseContabilService service;
 
     @BeforeEach
     void setUp() {
         sugestaoRepository = Mockito.mock(SugestaoRepository.class);
         lancamentoRepository = Mockito.mock(LancamentoRepository.class);
+        planoContasClient = Mockito.mock(PlanoContasClient.class);
+        // Fail-open por omissão — ver mesma nota em LancamentoServiceImplTest
+        // (Auditoria C14, PartidasDobradas.validarContasExistem).
+        when(planoContasClient.listar()).thenReturn(List.of());
         // Simula a atribuição de id que a BD real faria no INSERT — sem isto,
         // salvo.getId() ficaria sempre null e sugestao.setLancamentoId(...)
         // nunca teria um valor para testar.
@@ -76,7 +82,8 @@ class AnaliseContabilServiceTest {
                 Mockito.mock(EntidadeService.class),
                 Mockito.mock(ContextoClassificacaoService.class),
                 enriquecimentoService,
-                new ObjectMapper()
+                new ObjectMapper(),
+                planoContasClient
         );
     }
 
@@ -209,6 +216,26 @@ class AnaliseContabilServiceTest {
         assertThatThrownBy(() -> service.aprovarSugestao(1L, 4L, request))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("não está equilibrado");
+
+        verify(lancamentoRepository, never()).save(any());
+    }
+
+    // Auditoria C14 — mesma validação de PartidasDobradas.validarContasExistem
+    // já coberta isoladamente em PartidasDobradasTest; aqui confirma-se que
+    // aprovarSugestao a chama mesmo, com o plano de contas real carregado.
+    @Test
+    void aprovarSugestao_contaInexistenteNoPlanoDeContas_lancaExcecaoENaoGrava() {
+        when(planoContasClient.listar()).thenReturn(List.of(new ContaDTO("31", "Clientes")));
+
+        Sugestao sugestao = sugestaoBase();
+        sugestao.setLinhasJson(null);
+        sugestao.setCategoriaContabil("99.99");
+        sugestao.setValor("50000.00");
+        when(sugestaoRepository.findById(1L)).thenReturn(java.util.Optional.of(sugestao));
+
+        assertThatThrownBy(() -> service.aprovarSugestao(1L, 4L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("99.99");
 
         verify(lancamentoRepository, never()).save(any());
     }

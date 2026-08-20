@@ -6,6 +6,8 @@ import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.model.Sugestao;
 import isaf.tfc.autolancamentosbackend.model.User;
 import isaf.tfc.autolancamentosbackend.service.AnaliseContabilService;
+import isaf.tfc.autolancamentosbackend.service.AuditLogService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,17 +18,26 @@ import org.springframework.web.bind.annotation.*;
 public class AnaliseController {
 
     private final AnaliseContabilService analiseContabilService;
+    // Auditoria C06/C07 — rejeitar uma sugestão da IA nunca tinha nenhum
+    // registo (ver AuditoriaService, comentário original: "Ficam FORA do
+    // âmbito ... rejeição de sugestões").
+    private final AuditLogService auditLogService;
 
-    public AnaliseController(AnaliseContabilService analiseContabilService) {
+    public AnaliseController(AnaliseContabilService analiseContabilService, AuditLogService auditLogService) {
         this.analiseContabilService = analiseContabilService;
+        this.auditLogService = auditLogService;
     }
 
     /**
      * Passo 1: recebe o id de um DocumentoContabilistico já enviado (upload),
      * manda o ficheiro ao Gemini e grava uma Sugestao com estado PENDENTE.
      */
-    // RN010: escrita fica fora do Auditor (ver DocumentoController.upload).
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CONTABILISTA')")
+    // Auditoria C02: analisar/aprovar/rejeitar ficam reservados ao
+    // Contabilista, tal como a criação manual (RN002/RN010, ver
+    // LancamentoController.criar) — antes desta correção, o Administrador
+    // conseguia oficializar lançamentos aprovando sugestões da IA, apesar
+    // de essa mesma regra o proibir no caminho manual.
+    @PreAuthorize("hasRole('CONTABILISTA')")
     @PostMapping
     public ResponseEntity<Sugestao> analisar(@RequestBody AnalisarDocumentoRequest request) {
         Sugestao sugestao = analiseContabilService.analisarDocumento(request.getDocumentoId());
@@ -42,7 +53,8 @@ public class AnaliseController {
      * (LancamentoDiario.tsx); se não vier, mantém o comportamento antigo
      * (lê linhasJson da Sugestao tal como foi gravado na análise).
      */
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CONTABILISTA')")
+    // Auditoria C02 — ver nota em analisar() acima.
+    @PreAuthorize("hasRole('CONTABILISTA')")
     @PostMapping("/{id}/aprovar")
     public ResponseEntity<LancamentoResponseDTO> aprovar(@PathVariable Long id,
                                                            @AuthenticationPrincipal User user,
@@ -55,10 +67,13 @@ public class AnaliseController {
      * Anula uma Sugestao pendente — o contabilista decidiu que a proposta da
      * IA não deve virar lançamento nenhum. Não cria Lancamento.
      */
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CONTABILISTA')")
+    // Auditoria C02 — ver nota em analisar() acima.
+    @PreAuthorize("hasRole('CONTABILISTA')")
     @PostMapping("/{id}/rejeitar")
-    public ResponseEntity<Void> rejeitar(@PathVariable Long id) {
+    public ResponseEntity<Void> rejeitar(@PathVariable Long id, @AuthenticationPrincipal User user, HttpServletRequest httpRequest) {
         analiseContabilService.rejeitarSugestao(id);
+        auditLogService.registar(user, "REJEITAR_SUGESTAO", "Sugestao", id,
+                AuditLogService.SUCESSO, null, httpRequest.getRemoteAddr());
         return ResponseEntity.noContent().build();
     }
 }

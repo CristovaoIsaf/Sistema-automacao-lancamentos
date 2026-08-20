@@ -93,8 +93,14 @@ public class User implements UserDetails {
         return true;
     }
 
+    // Auditoria C09: até aqui devolvia sempre true — o campo "status" nunca
+    // era lido por ninguém, por isso não havia forma nenhuma de suspender
+    // o acesso de um utilizador (só apagá-lo fisicamente, ver
+    // UserService.apagar). "ATIVO" é o único valor que UserService.criar
+    // grava por omissão; qualquer outro (ex. "INATIVO") passa a bloquear
+    // login (AuthController) e pedidos autenticados (JwtAuthFilter).
     @Override
     public boolean isEnabled() {
-        return true;
+        return "ATIVO".equals(status);
     }
 }

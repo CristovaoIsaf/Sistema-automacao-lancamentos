@@ -29,4 +29,15 @@ public class LogAuditoriaDTO {
     private String entidade;
 
     private LocalDateTime dataHora;
+
+    // Auditoria C06/C07 — só preenchidos para eventos vindos da tabela
+    // AuditLog (ver AuditoriaService.eventosDeAuditLog); os eventos
+    // derivados de Lancamento/Documento continuam sem "resultado" próprio
+    // (são sempre uma operação que teve sucesso — se tivesse falhado, não
+    // haveria linha nenhuma para derivar).
+    private String resultado;
+
+    private String motivo;
+
+    private String ip;
 }

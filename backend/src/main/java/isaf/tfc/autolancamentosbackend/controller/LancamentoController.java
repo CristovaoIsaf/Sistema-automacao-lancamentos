@@ -1,8 +1,10 @@
 package isaf.tfc.autolancamentosbackend.controller;
 
+import isaf.tfc.autolancamentosbackend.dto.LancamentoHistoricoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
+import isaf.tfc.autolancamentosbackend.dto.SolicitarCancelamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 import isaf.tfc.autolancamentosbackend.model.User;
 import isaf.tfc.autolancamentosbackend.service.LancamentoService;
@@ -95,13 +97,66 @@ public class LancamentoController {
 
 
     /**
-     * Cancela um lançamento (não apaga — mantém rasto para auditoria).
+     * Auditoria C04 — versões anteriores deste lançamento, mais recente
+     * primeiro. Sem restrição de papel, tal como buscar()/listar() — o
+     * Auditor tem de conseguir ver isto tanto quanto o Contabilista (RN010
+     * é sobre ESCRITA, nunca sobre consulta).
+     */
+    @GetMapping("/{id}/historico")
+    public ResponseEntity<List<LancamentoHistoricoDTO>> historico(@PathVariable Long id) {
+        return ResponseEntity.ok(service.listarHistorico(id));
+    }
+
+
+    /**
+     * Auditoria C01 — aprova um lançamento manual PENDENTE (criado por OUTRO
+     * contabilista); só depois disto passa a contar para relatórios.
      */
     @PreAuthorize("hasRole('CONTABILISTA')")
-    @PostMapping("/{id}/cancelar")
-    public ResponseEntity<Void> cancelar(@PathVariable Long id, @AuthenticationPrincipal User user) {
-        service.cancelar(id, user.getId());
-        return ResponseEntity.noContent().build();
+    @PostMapping("/{id}/aprovar")
+    public ResponseEntity<LancamentoResponseDTO> aprovar(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(service.aprovar(id, user.getId()));
+    }
+
+
+    /**
+     * Auditoria C03 — pede a anulação de um lançamento validado (motivo
+     * obrigatório); não tem efeito nenhum até um segundo contabilista
+     * aprovar ou rejeitar o pedido (ver aprovarCancelamento/
+     * rejeitarCancelamento abaixo). Substitui o antigo POST /cancelar
+     * (mudava logo o estado, sem motivo nem segunda aprovação).
+     */
+    @PreAuthorize("hasRole('CONTABILISTA')")
+    @PostMapping("/{id}/solicitar-cancelamento")
+    public ResponseEntity<LancamentoResponseDTO> solicitarCancelamento(
+            @PathVariable Long id,
+            @RequestBody SolicitarCancelamentoRequestDTO request,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(service.solicitarCancelamento(id, request.getMotivo(), user.getId()));
+    }
+
+
+    /**
+     * Auditoria C03 — aprova o pedido de anulação (por OUTRO contabilista):
+     * marca o original como CANCELADO e devolve o lançamento de estorno
+     * gerado automaticamente.
+     */
+    @PreAuthorize("hasRole('CONTABILISTA')")
+    @PostMapping("/{id}/aprovar-cancelamento")
+    public ResponseEntity<LancamentoResponseDTO> aprovarCancelamento(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(service.aprovarCancelamento(id, user.getId()));
+    }
+
+
+    /**
+     * Auditoria C03 — rejeita o pedido de anulação (por OUTRO contabilista):
+     * o lançamento volta a VALIDADO, sem nenhum estorno.
+     */
+    @PreAuthorize("hasRole('CONTABILISTA')")
+    @PostMapping("/{id}/rejeitar-cancelamento")
+    public ResponseEntity<LancamentoResponseDTO> rejeitarCancelamento(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(service.rejeitarCancelamento(id, user.getId()));
     }
 
 

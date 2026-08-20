@@ -48,4 +48,17 @@ public class LancamentoResponseDTO {
     private Long validadoPor;
 
     private String validadoPorNome;
+
+    // Auditoria C01/C03 — ver LancamentoEnriquecimentoService.construir().
+    private Long criadoPor;
+
+    private String criadoPorNome;
+
+    private String motivoCancelamento;
+
+    private Long cancelamentoSolicitadoPor;
+
+    private String cancelamentoSolicitadoPorNome;
+
+    private Long estornoDeId;
 }

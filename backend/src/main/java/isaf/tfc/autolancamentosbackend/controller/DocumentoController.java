@@ -231,7 +231,8 @@ public class DocumentoController {
     @Transactional
     public ResponseEntity<DocumentoResponseDTO> corrigirClassificacao(
             @PathVariable Long id,
-            @RequestBody CorrigirClassificacaoRequestDTO request
+            @RequestBody CorrigirClassificacaoRequestDTO request,
+            @AuthenticationPrincipal User user
     ) {
         DocumentoContabilistico documento = documentoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Documento não encontrado"));
@@ -240,16 +241,37 @@ public class DocumentoController {
                 .orElseThrow(() -> new RuntimeException(
                         "Este documento ainda não foi analisado — não há classificação para corrigir"));
 
-        if (request.getTipoDocumento() != null) {
-            maisRecente.setTipoDocumento(request.getTipoDocumento());
+        boolean houveAlteracao = request.getTipoDocumento() != null
+                || request.getNumeroDocumento() != null
+                || request.getValor() != null;
+
+        if (houveAlteracao) {
+            // Auditoria C05: snapshot dos valores da IA só na primeira
+            // correção — nunca sobrescreve um snapshot já guardado, para o
+            // *OriginalIA continuar a refletir sempre a sugestão original,
+            // mesmo que o documento seja corrigido mais do que uma vez.
+            boolean primeiraCorrecao = maisRecente.getTipoDocumentoOriginalIA() == null
+                    && maisRecente.getNumeroDocumentoOriginalIA() == null
+                    && maisRecente.getValorOriginalIA() == null;
+            if (primeiraCorrecao) {
+                maisRecente.setTipoDocumentoOriginalIA(maisRecente.getTipoDocumento());
+                maisRecente.setNumeroDocumentoOriginalIA(maisRecente.getNumeroDocumento());
+                maisRecente.setValorOriginalIA(maisRecente.getValor());
+            }
+
+            if (request.getTipoDocumento() != null) {
+                maisRecente.setTipoDocumento(request.getTipoDocumento());
+            }
+            if (request.getNumeroDocumento() != null) {
+                maisRecente.setNumeroDocumento(request.getNumeroDocumento());
+            }
+            if (request.getValor() != null) {
+                maisRecente.setValor(request.getValor());
+            }
+            maisRecente.setCorrigidoPor(user.getId());
+            maisRecente.setCorrigidoEm(java.time.LocalDateTime.now());
+            sugestaoRepository.save(maisRecente);
         }
-        if (request.getNumeroDocumento() != null) {
-            maisRecente.setNumeroDocumento(request.getNumeroDocumento());
-        }
-        if (request.getValor() != null) {
-            maisRecente.setValor(request.getValor());
-        }
-        sugestaoRepository.save(maisRecente);
 
         return ResponseEntity.ok(enriquecimentoService.converter(documento));
     }

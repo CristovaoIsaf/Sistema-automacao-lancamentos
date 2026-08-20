@@ -54,4 +54,16 @@ public class DocumentoResponseDTO {
     // do frontend, sem novo formato. null se o documento ainda não foi
     // analisado ou a sugestão é anterior à Fase 3 (sem validação).
     private String validacaoJson;
+
+    // Auditoria C05 ("a sugestão original fica preservada mesmo após
+    // correção humana") — null enquanto a classificação nunca foi corrigida
+    // por um humano; ver Sugestao.tipoDocumentoOriginalIA e
+    // DocumentoController.corrigirClassificacao.
+    private String tipoDocumentoOriginalIA;
+
+    private String numeroDocumentoOriginalIA;
+
+    private String valorOriginalIA;
+
+    private java.time.LocalDateTime corrigidoEm;
 }

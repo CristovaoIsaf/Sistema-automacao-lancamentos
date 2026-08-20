@@ -69,7 +69,11 @@ public class DocumentoEnriquecimentoService {
                 maisRecente != null ? maisRecente.getTipoDocumento() : null,
                 maisRecente != null ? maisRecente.getNumeroDocumento() : null,
                 maisRecente != null ? maisRecente.getValor() : null,
-                maisRecente != null ? maisRecente.getValidacaoJson() : null
+                maisRecente != null ? maisRecente.getValidacaoJson() : null,
+                maisRecente != null ? maisRecente.getTipoDocumentoOriginalIA() : null,
+                maisRecente != null ? maisRecente.getNumeroDocumentoOriginalIA() : null,
+                maisRecente != null ? maisRecente.getValorOriginalIA() : null,
+                maisRecente != null ? maisRecente.getCorrigidoEm() : null
         );
     }
 

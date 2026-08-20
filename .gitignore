@@ -1,2 +1,12 @@
 .DS_Store
 Thumbs.db
+
+# local tooling (Claude Code, VS Code, skills)
+.claude/
+.vscode/
+skills-lock.json
+
+# generated run logs / crash dumps
+*_run.log
+*_run_err.log
+*.stackdump

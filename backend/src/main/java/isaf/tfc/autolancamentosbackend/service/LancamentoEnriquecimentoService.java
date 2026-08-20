@@ -76,8 +76,18 @@ public class LancamentoEnriquecimentoService {
         Map<Long, Entidade> entidadesPorId = entidadeRepository.findAllById(entidadeIds).stream()
                 .collect(Collectors.toMap(Entidade::getId, e -> e));
 
-        List<Long> validadoPorIds = idsDistintos(lancamentos, Lancamento::getValidadoPor);
-        Map<Long, User> usersPorId = userRepository.findAllById(validadoPorIds).stream()
+        // Auditoria C01/C03: além de validadoPor, agora também é preciso
+        // resolver o nome de quem criou (criadoPor) e, quando aplicável,
+        // de quem pediu a anulação (cancelamentoSolicitadoPor) — mesmo
+        // mapa partilhado, para não repetir o findAllById.
+        List<Long> todosOsIdsDeUtilizador = java.util.stream.Stream.of(
+                        idsDistintos(lancamentos, Lancamento::getValidadoPor),
+                        idsDistintos(lancamentos, Lancamento::getCriadoPor),
+                        idsDistintos(lancamentos, Lancamento::getCancelamentoSolicitadoPor))
+                .flatMap(List::stream)
+                .distinct()
+                .toList();
+        Map<Long, User> usersPorId = userRepository.findAllById(todosOsIdsDeUtilizador).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
         return lancamentos.stream()
@@ -129,6 +139,18 @@ public class LancamentoEnriquecimentoService {
         User validadoPor = lancamento.getValidadoPor() != null ? usersPorId.get(lancamento.getValidadoPor()) : null;
         dto.setValidadoPor(lancamento.getValidadoPor());
         dto.setValidadoPorNome(validadoPor != null ? validadoPor.getNome() : null);
+
+        User criadoPor = lancamento.getCriadoPor() != null ? usersPorId.get(lancamento.getCriadoPor()) : null;
+        dto.setCriadoPor(lancamento.getCriadoPor());
+        dto.setCriadoPorNome(criadoPor != null ? criadoPor.getNome() : null);
+
+        dto.setMotivoCancelamento(lancamento.getMotivoCancelamento());
+        User solicitante = lancamento.getCancelamentoSolicitadoPor() != null
+                ? usersPorId.get(lancamento.getCancelamentoSolicitadoPor()) : null;
+        dto.setCancelamentoSolicitadoPor(lancamento.getCancelamentoSolicitadoPor());
+        dto.setCancelamentoSolicitadoPorNome(solicitante != null ? solicitante.getNome() : null);
+
+        dto.setEstornoDeId(lancamento.getEstornoDeId());
 
         return dto;
     }

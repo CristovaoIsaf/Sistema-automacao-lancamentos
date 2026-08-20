@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, Download, Eye, Edit2, Plus, CheckCircle2, Clock, XCircle, X, Check, Loader2 } from 'lucide-react';
+import { Search, Download, Eye, Edit2, Plus, CheckCircle2, Clock, XCircle, X, Check, Loader2, ThumbsUp, Undo2 } from 'lucide-react';
 import { formatarKwanza } from '../data/mockData';
 import * as Dialog from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import { useAuth, permissoes } from '../auth/AuthContext';
-import { criarLancamento, exportarLancamentos, listarLancamentos } from '../api/lancamentoApi';
+import {
+  aprovarCancelamentoLancamento,
+  aprovarLancamento,
+  criarLancamento,
+  exportarLancamentos,
+  listarHistoricoLancamento,
+  listarLancamentos,
+  rejeitarCancelamentoLancamento,
+  solicitarCancelamentoLancamento,
+} from '../api/lancamentoApi';
 import { listarContas } from '../api/contaApi';
-import type { LancamentoResponse } from '../types/lancamento';
+import type { LancamentoHistoricoVersao, LancamentoResponse } from '../types/lancamento';
 import type { ContaResumo } from '../types/categoriaConta';
 
 function Badge({ variant, children }: { variant: 'aprovado' | 'pendente' | 'rejeitado' | 'ia' | 'manual'; children: React.ReactNode }) {
@@ -25,12 +34,13 @@ function Badge({ variant, children }: { variant: 'aprovado' | 'pendente' | 'reje
   );
 }
 
-type StatusFilter = 'todos' | 'PENDENTE' | 'VALIDADO' | 'CANCELADO';
+type StatusFilter = 'todos' | 'PENDENTE' | 'VALIDADO' | 'CANCELADO' | 'CANCELAMENTO_PENDENTE';
 
 const estadoBadge: Record<string, { variant: 'aprovado' | 'pendente' | 'rejeitado'; label: string }> = {
   VALIDADO: { variant: 'aprovado', label: 'Validado' },
-  PENDENTE: { variant: 'pendente', label: 'Pendente' },
+  PENDENTE: { variant: 'pendente', label: 'Pendente aprovação' },
   CANCELADO: { variant: 'rejeitado', label: 'Cancelado' },
+  CANCELAMENTO_PENDENTE: { variant: 'pendente', label: 'Anulação pendente' },
 };
 
 function contaDebito(l: LancamentoResponse): string {
@@ -176,6 +186,44 @@ function NovoLancamentoDialog({ open, onClose, onCriado, contas }: { open: boole
   );
 }
 
+// Auditoria C04 — versões anteriores do lançamento (uma por cada edição),
+// carregadas só quando o diálogo abre com um lançamento que já foi editado
+// (ver Lancamento.atualizadoEm — o mesmo sinal que a Badge "Editado" usa).
+function HistoricoLancamento({ lancamentoId }: { lancamentoId: number }) {
+  const [versoes, setVersoes] = useState<LancamentoHistoricoVersao[] | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    setVersoes(null);
+    listarHistoricoLancamento(lancamentoId)
+      .then(dados => { if (!cancelado) setVersoes(dados); })
+      .catch(err => console.error('Erro ao carregar histórico do lançamento:', err));
+    return () => { cancelado = true; };
+  }, [lancamentoId]);
+
+  if (!versoes || versoes.length === 0) return null;
+
+  return (
+    <div className="pt-2 border-t border-[#F1F5F9]">
+      <p className="text-[11px] font-medium text-[#475569] mb-1.5">Histórico de edições ({versoes.length})</p>
+      <div className="space-y-2 max-h-[160px] overflow-y-auto">
+        {versoes.map(v => (
+          <div key={v.id} className="bg-[#F8FAFC] rounded-md px-2.5 py-2 text-[12px]">
+            <div className="flex items-center justify-between text-[#94A3B8] text-[11px] mb-0.5">
+              <span>{v.alteradoPorNome ?? 'Utilizador desconhecido'}</span>
+              <span>{new Date(v.alteradoEm).toLocaleString('pt-AO')}</span>
+            </div>
+            <p className="text-[#0F172A]">{v.descricaoAnterior}</p>
+            <p className="text-[#64748B]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {v.linhasAnteriores.map(l => l.conta).join(' → ')}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function VerLancamentoDialog({ lancamento, onClose }: { lancamento: LancamentoResponse | null; onClose: () => void }) {
   return (
     <Dialog.Root open={!!lancamento} onOpenChange={v => !v && onClose()}>
@@ -233,12 +281,33 @@ function VerLancamentoDialog({ lancamento, onClose }: { lancamento: LancamentoRe
                   </div>
                 )}
               </div>
+              {lancamento.criadoPorNome && (
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Criado por</p>
+                  <p className="text-[#0F172A]">{lancamento.criadoPorNome}</p>
+                </div>
+              )}
               {lancamento.validadoPorNome && (
                 <div>
                   <p className="text-[11px] font-medium text-[#475569] mb-1">Validado por</p>
                   <p className="text-[#0F172A]">{lancamento.validadoPorNome}</p>
                 </div>
               )}
+              {lancamento.motivoCancelamento && (
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">
+                    Motivo da anulação{lancamento.cancelamentoSolicitadoPorNome ? ` (pedida por ${lancamento.cancelamentoSolicitadoPorNome})` : ''}
+                  </p>
+                  <p className="text-[#0F172A]">{lancamento.motivoCancelamento}</p>
+                </div>
+              )}
+              {lancamento.estornoDeId && (
+                <div>
+                  <p className="text-[11px] font-medium text-[#475569] mb-1">Estorno do lançamento</p>
+                  <p className="text-[#0F172A]">#{lancamento.estornoDeId}</p>
+                </div>
+              )}
+              <HistoricoLancamento lancamentoId={lancamento.id} />
             </div>
           )}
 
@@ -253,8 +322,79 @@ function VerLancamentoDialog({ lancamento, onClose }: { lancamento: LancamentoRe
   );
 }
 
+// Auditoria C03 — motivo é obrigatório para pedir a anulação de um
+// lançamento validado; fica registado em Lancamento.motivoCancelamento até
+// um segundo contabilista aprovar ou rejeitar o pedido.
+function SolicitarCancelamentoDialog({
+  lancamento, onClose, onSolicitado,
+}: { lancamento: LancamentoResponse | null; onClose: () => void; onSolicitado: () => void }) {
+  const [motivo, setMotivo] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => { setMotivo(''); }, [lancamento?.id]);
+
+  const handleEnviar = async () => {
+    if (!lancamento) return;
+    if (!motivo.trim()) {
+      toast.error('Indique o motivo da anulação');
+      return;
+    }
+    try {
+      setEnviando(true);
+      await solicitarCancelamentoLancamento(lancamento.id, motivo.trim());
+      toast.success('Pedido de anulação enviado — falta a aprovação de outro contabilista');
+      onSolicitado();
+      onClose();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao pedir a anulação do lançamento');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open={!!lancamento} onOpenChange={v => !v && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/30 z-50" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-[420px] bg-white border border-[#E2E8F0] rounded-xl shadow-sm" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E2E8F0]">
+            <Dialog.Title className="text-[14px] font-semibold text-[#0F172A]">Pedir anulação do lançamento</Dialog.Title>
+            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
+              <X style={{ width: 14, height: 14 }} />
+            </button>
+          </div>
+          <div className="p-5 space-y-3">
+            <p className="text-[12px] text-[#475569]">
+              O lançamento só é anulado (com estorno automático) depois de outro contabilista aprovar este pedido.
+            </p>
+            <div>
+              <label className="block text-[12px] font-medium text-[#475569] mb-1.5">Motivo</label>
+              <textarea
+                value={motivo}
+                onChange={e => setMotivo(e.target.value)}
+                placeholder="Ex.: lançamento duplicado, conta errada..."
+                rows={3}
+                className="w-full px-3 py-2 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all resize-none"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[#E2E8F0]">
+            <button onClick={onClose} className="h-8 px-3 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A] text-[13px] font-medium rounded-md transition-colors">
+              Cancelar
+            </button>
+            <button onClick={handleEnviar} disabled={enviando} className="flex items-center gap-1.5 h-8 px-3 bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[13px] font-medium rounded-md transition-colors disabled:opacity-50">
+              {enviando ? <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} /> : <Check style={{ width: 13, height: 13 }} />} Enviar pedido
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 export function Lancamentos() {
-  const { perfil } = useAuth();
+  const { perfil, utilizador } = useAuth();
   const navigate = useNavigate();
   const podeEscrever = permissoes(perfil).podeEscreverLancamentos; // RN010: Auditor não escreve
   const [search, setSearch] = useState('');
@@ -264,6 +404,8 @@ export function Lancamentos() {
   const [utilizadorFilter, setUtilizadorFilter] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [lancamentoEmVisualizacao, setLancamentoEmVisualizacao] = useState<LancamentoResponse | null>(null);
+  const [lancamentoParaCancelar, setLancamentoParaCancelar] = useState<LancamentoResponse | null>(null);
+  const [emAcao, setEmAcao] = useState<number | null>(null);
   const [lancamentos, setLancamentos] = useState<LancamentoResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -294,6 +436,34 @@ export function Lancamentos() {
   useEffect(() => {
     carregar();
   }, []);
+
+  // Auditoria C01/C03 — aprovar um lançamento e aprovar/rejeitar um pedido
+  // de anulação seguem o mesmo padrão: chamada à API, toast, recarregar a
+  // lista. O backend é sempre quem decide se o utilizador pode fazê-lo
+  // (não pode ser quem criou/pediu) — aqui só se evita mostrar o botão
+  // quando já se sabe de antemão que vai falhar.
+  const executarAcao = async (id: number, acao: () => Promise<LancamentoResponse>, mensagem: string) => {
+    try {
+      setEmAcao(id);
+      await acao();
+      toast.success(mensagem);
+      await carregar();
+    } catch (error) {
+      console.error(error);
+      toast.error('Não foi possível concluir — verifique se não é o próprio autor do pedido');
+    } finally {
+      setEmAcao(null);
+    }
+  };
+
+  const handleAprovar = (l: LancamentoResponse) =>
+    executarAcao(l.id, () => aprovarLancamento(l.id), 'Lançamento aprovado');
+
+  const handleAprovarCancelamento = (l: LancamentoResponse) =>
+    executarAcao(l.id, () => aprovarCancelamentoLancamento(l.id), 'Anulação aprovada — estorno gerado');
+
+  const handleRejeitarCancelamento = (l: LancamentoResponse) =>
+    executarAcao(l.id, () => rejeitarCancelamentoLancamento(l.id), 'Pedido de anulação rejeitado');
 
   const handleExportar = async () => {
     try {
@@ -339,6 +509,7 @@ export function Lancamentos() {
     aprovados: lancamentos.filter(l => l.estado === 'VALIDADO').length,
     pendentes: lancamentos.filter(l => l.estado === 'PENDENTE').length,
     rejeitados: lancamentos.filter(l => l.estado === 'CANCELADO').length,
+    anulacaoPendente: lancamentos.filter(l => l.estado === 'CANCELAMENTO_PENDENTE').length,
   };
 
   return (
@@ -397,6 +568,12 @@ export function Lancamentos() {
           <XCircle style={{ width: 12, height: 12 }} />
           <span>{counts.rejeitados} cancelados</span>
         </div>
+        {counts.anulacaoPendente > 0 && (
+          <div className="flex items-center gap-1.5 text-[#D97706]">
+            <Undo2 style={{ width: 12, height: 12 }} />
+            <span>{counts.anulacaoPendente} com anulação pendente</span>
+          </div>
+        )}
       </div>
 
       {/* Filters inline */}
@@ -417,7 +594,8 @@ export function Lancamentos() {
         >
           <option value="todos">Todos os estados</option>
           <option value="VALIDADO">Validado</option>
-          <option value="PENDENTE">Pendente</option>
+          <option value="PENDENTE">Pendente aprovação</option>
+          <option value="CANCELAMENTO_PENDENTE">Anulação pendente</option>
           <option value="CANCELADO">Cancelado</option>
         </select>
         <select
@@ -519,7 +697,7 @@ export function Lancamentos() {
                       <button onClick={() => setLancamentoEmVisualizacao(l)} title="Ver" className="w-6 h-6 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors">
                         <Eye style={{ width: 13, height: 13 }} />
                       </button>
-                      {podeEscrever && (
+                      {podeEscrever && l.estado !== 'CANCELADO' && l.estado !== 'CANCELAMENTO_PENDENTE' && (
                         <button
                           onClick={() => navigate('/lancamento-diario', { state: { lancamentoParaEditar: l } })}
                           title="Editar"
@@ -527,6 +705,50 @@ export function Lancamentos() {
                         >
                           <Edit2 style={{ width: 13, height: 13 }} />
                         </button>
+                      )}
+                      {/* Auditoria C01 — aprovar exige um segundo contabilista: escondido
+                          quando o utilizador autenticado é quem criou (o backend também
+                          o bloqueia, isto é só para não convidar a um clique que falha). */}
+                      {podeEscrever && l.estado === 'PENDENTE' && String(l.criadoPor) !== utilizador.id && (
+                        <button
+                          onClick={() => handleAprovar(l)}
+                          disabled={emAcao === l.id}
+                          title="Aprovar lançamento"
+                          className="w-6 h-6 flex items-center justify-center text-[#059669] hover:bg-[#ECFDF5] rounded transition-colors disabled:opacity-50"
+                        >
+                          {emAcao === l.id ? <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} /> : <ThumbsUp style={{ width: 13, height: 13 }} />}
+                        </button>
+                      )}
+                      {podeEscrever && l.estado === 'VALIDADO' && (
+                        <button
+                          onClick={() => setLancamentoParaCancelar(l)}
+                          title="Pedir anulação"
+                          className="w-6 h-6 flex items-center justify-center text-[#DC2626] hover:bg-[#FEF2F2] rounded transition-colors"
+                        >
+                          <Undo2 style={{ width: 13, height: 13 }} />
+                        </button>
+                      )}
+                      {/* Auditoria C03 — aprovar/rejeitar a anulação exige um segundo
+                          contabilista, diferente de quem pediu. */}
+                      {podeEscrever && l.estado === 'CANCELAMENTO_PENDENTE' && String(l.cancelamentoSolicitadoPor) !== utilizador.id && (
+                        <>
+                          <button
+                            onClick={() => handleAprovarCancelamento(l)}
+                            disabled={emAcao === l.id}
+                            title={`Aprovar anulação${l.motivoCancelamento ? ` — motivo: ${l.motivoCancelamento}` : ''}`}
+                            className="w-6 h-6 flex items-center justify-center text-[#059669] hover:bg-[#ECFDF5] rounded transition-colors disabled:opacity-50"
+                          >
+                            {emAcao === l.id ? <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} /> : <CheckCircle2 style={{ width: 13, height: 13 }} />}
+                          </button>
+                          <button
+                            onClick={() => handleRejeitarCancelamento(l)}
+                            disabled={emAcao === l.id}
+                            title="Rejeitar anulação"
+                            className="w-6 h-6 flex items-center justify-center text-[#DC2626] hover:bg-[#FEF2F2] rounded transition-colors disabled:opacity-50"
+                          >
+                            <XCircle style={{ width: 13, height: 13 }} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -544,6 +766,11 @@ export function Lancamentos() {
 
       <NovoLancamentoDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onCriado={carregar} contas={contas} />
       <VerLancamentoDialog lancamento={lancamentoEmVisualizacao} onClose={() => setLancamentoEmVisualizacao(null)} />
+      <SolicitarCancelamentoDialog
+        lancamento={lancamentoParaCancelar}
+        onClose={() => setLancamentoParaCancelar(null)}
+        onSolicitado={carregar}
+      />
     </div>
   );
 }

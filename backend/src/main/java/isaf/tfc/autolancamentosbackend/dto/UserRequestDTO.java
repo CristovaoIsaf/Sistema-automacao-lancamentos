@@ -7,7 +7,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * senha é opcional em atualizações — só é alterada quando vem preenchida
- * (ver UserService.atualizar).
+ * (ver UserService.atualizar). status idem (Auditoria C09) — "ATIVO"/
+ * "INATIVO"; em falta ou vazio, mantém o estado atual do utilizador.
  */
 @Data
 @AllArgsConstructor
@@ -23,4 +24,6 @@ public class UserRequestDTO {
     private String senha;
 
     private Role papel;
+
+    private String status;
 }

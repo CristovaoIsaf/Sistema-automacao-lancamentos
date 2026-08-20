@@ -31,7 +31,17 @@ public class Lancamento {
 
     private String descricao;
 
+    // columnDefinition explícito (Auditoria C01/C03 — descoberto num teste
+    // HTTP ao vivo antes desta correção): sem isto, o Hibernate 7 gera por
+    // omissão uma CHECK constraint em BD listando os valores do enum NO
+    // MOMENTO em que a coluna foi criada pela primeira vez — spring.jpa.
+    // hibernate.ddl-auto=update nunca a atualiza depois, por isso
+    // acrescentar CANCELAMENTO_PENDENTE ao enum Java rebentava com
+    // "violates check constraint lancamento_estado_check" em qualquer BD
+    // já existente (esta em dev incluída — constraint já removida
+    // manualmente aqui). Isto evita o Hibernate voltar a gerar uma.
     @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(255)")
     private EstadoLancamento estado;
 
     @Enumerated(EnumType.STRING)
@@ -65,6 +75,34 @@ public class Lancamento {
 
     @Column(name = "alterado_por")
     private Long alteradoPor;
+
+    // Auditoria C01: até aqui não havia nenhum campo que guardasse quem
+    // CRIOU um lançamento manual separado de quem o VALIDOU — as duas
+    // coisas eram sempre a mesma pessoa, na mesma chamada
+    // (criarLancamentoManual gravava criadoPor diretamente em
+    // validadoPor). Só relevante para origem MANUAL; AUTOMATICO continua
+    // sem criador humano direto (a origem é a Sugestao da IA — ver
+    // sugestaoId).
+    @Column(name = "criado_por")
+    private Long criadoPor;
+
+    // Auditoria C03: pedido de anulação de um lançamento VALIDADO —
+    // preenchidos quando estado = CANCELAMENTO_PENDENTE, limpos de novo
+    // (para null) se o pedido for rejeitado. motivoCancelamento fica
+    // preenchido mesmo depois de aprovado (CANCELADO), como registo do
+    // porquê.
+    @Column(name = "motivo_cancelamento", columnDefinition = "TEXT")
+    private String motivoCancelamento;
+
+    @Column(name = "cancelamento_solicitado_por")
+    private Long cancelamentoSolicitadoPor;
+
+    // Auditoria C03: quando este Lancamento É o estorno de outro (gerado
+    // automaticamente ao aprovar um pedido de anulação — ver
+    // LancamentoServiceImpl.aprovarCancelamento), aponta para o id do
+    // Lancamento original revertido. null em todos os outros casos.
+    @Column(name = "estorno_de_id")
+    private Long estornoDeId;
 
     @PrePersist
     public void aoCriar() {

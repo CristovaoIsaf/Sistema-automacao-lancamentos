@@ -1,10 +1,14 @@
 package isaf.tfc.autolancamentosbackend.controller;
 
 import isaf.tfc.autolancamentosbackend.dto.EmpresaDTO;
+import isaf.tfc.autolancamentosbackend.model.User;
+import isaf.tfc.autolancamentosbackend.service.AuditLogService;
 import isaf.tfc.autolancamentosbackend.service.EmpresaService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -17,6 +21,9 @@ import org.springframework.web.bind.annotation.*;
 public class EmpresaController {
 
     private final EmpresaService empresaService;
+    // Auditoria C06/C07 — alterar os dados da empresa nunca tinha nenhum
+    // registo de auditoria.
+    private final AuditLogService auditLogService;
 
     // Leitura fica aberta a qualquer papel autenticado — nome/NIF da
     // empresa são informação de contexto que Contabilista/Auditor também
@@ -31,7 +38,14 @@ public class EmpresaController {
     // conseguia alterar o NIF/nome/morada da empresa.
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     @PutMapping
-    public ResponseEntity<EmpresaDTO> atualizar(@RequestBody EmpresaDTO dados) {
-        return ResponseEntity.ok(empresaService.atualizarEmpresa(dados));
+    public ResponseEntity<EmpresaDTO> atualizar(
+            @RequestBody EmpresaDTO dados,
+            @AuthenticationPrincipal User admin,
+            HttpServletRequest httpRequest
+    ) {
+        EmpresaDTO atualizada = empresaService.atualizarEmpresa(dados);
+        auditLogService.registar(admin, "ATUALIZAR_EMPRESA", "Empresa", atualizada.getId(),
+                AuditLogService.SUCESSO, null, httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(atualizada);
     }
 }

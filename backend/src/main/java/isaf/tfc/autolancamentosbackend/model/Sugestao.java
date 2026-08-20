@@ -97,6 +97,28 @@ public class Sugestao {
     @Column(name = "pergunta_contextualizacao_json", columnDefinition = "TEXT")
     private String perguntaContextualizacaoJson;
 
+    // Auditoria C05 — "a sugestão original fica preservada mesmo após
+    // correção humana": até aqui, DocumentoController.corrigirClassificacao
+    // sobrescrevia tipoDocumento/numeroDocumento/valor diretamente, sem
+    // guardar o que a IA tinha sugerido antes da correção. Preenchidos só
+    // na PRIMEIRA correção (snapshot dos valores de tipoDocumento/
+    // numeroDocumento/valor nesse momento); ficam null enquanto a
+    // classificação nunca foi corrigida por um humano.
+    @Column(name = "tipo_documento_original_ia")
+    private String tipoDocumentoOriginalIA;
+
+    @Column(name = "numero_documento_original_ia")
+    private String numeroDocumentoOriginalIA;
+
+    @Column(name = "valor_original_ia")
+    private String valorOriginalIA;
+
+    @Column(name = "corrigido_por")
+    private Long corrigidoPor;
+
+    @Column(name = "corrigido_em")
+    private LocalDateTime corrigidoEm;
+
     @Enumerated(EnumType.STRING)
     private EstadoSugestao estado;
 

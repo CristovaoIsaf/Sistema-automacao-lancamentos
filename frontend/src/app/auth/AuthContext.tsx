@@ -42,12 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const utilizador = utilizadorReal ?? UTILIZADORES_MOCK[perfil];
 
-  function aplicarSessao(resp: { token: string; nome: string; email: string; papel: string }) {
+  function aplicarSessao(resp: { id: number; token: string; nome: string; email: string; papel: string }) {
     setToken(resp.token);
     const p = resp.papel as Perfil;
     setPerfil(p);
     setUtilizadorReal({
-      id: '-', nome: resp.nome, email: resp.email,
+      // Auditoria C01/C03 — id real do utilizador (antes ficava sempre
+      // "-"): Lancamentos.tsx usa-o para saber se pode aprovar um
+      // lançamento/anulação que ele próprio criou/pediu.
+      id: String(resp.id), nome: resp.nome, email: resp.email,
       perfil: p, nif: '', ativo: true, ultimoAcesso: '',
     });
     setAutenticado(true);

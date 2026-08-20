@@ -9,6 +9,8 @@ import isaf.tfc.autolancamentosbackend.model.User;
 import isaf.tfc.autolancamentosbackend.repository.EmpresaRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
 import isaf.tfc.autolancamentosbackend.security.JwtUtil;
+import isaf.tfc.autolancamentosbackend.service.AuditLogService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,19 +26,38 @@ public class AuthController {
     private final EmpresaRepository empresaRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
+    // Auditoria C06/C07 — login nunca tinha nenhum registo, sucesso ou
+    // falha (ver AuditLog).
+    private final AuditLogService auditLogService;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponseDTO> login(@RequestBody LoginRequestDTO dto) {
-        User user = userRepository.findByEmail(dto.getEmail())
-                .orElseThrow(() -> new RuntimeException("Utilizador não encontrado"));
+    public ResponseEntity<LoginResponseDTO> login(@RequestBody LoginRequestDTO dto, HttpServletRequest httpRequest) {
+        String ip = httpRequest.getRemoteAddr();
+
+        User user = userRepository.findByEmail(dto.getEmail()).orElse(null);
+        if (user == null) {
+            auditLogService.registarComEmail(dto.getEmail(), "LOGIN", AuditLogService.FALHA, "Utilizador não encontrado", ip);
+            throw new RuntimeException("Utilizador não encontrado");
+        }
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+            auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.FALHA, "Password inválida", ip);
             throw new RuntimeException("Senha inválida");
         }
+
+        // Auditoria C09: utilizador suspenso (status != "ATIVO") não pode
+        // iniciar sessão, mesmo com a password correta — ver User.isEnabled().
+        if (!user.isEnabled()) {
+            auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.FALHA, "Utilizador inativo", ip);
+            throw new RuntimeException("Utilizador inativo");
+        }
+
+        auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.SUCESSO, null, ip);
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getPapel());
 
         LoginResponseDTO response = new LoginResponseDTO(
+                user.getId(),
                 token,
                 "Bearer",
                 user.getEmail(),
@@ -84,6 +105,7 @@ public class AuthController {
         String token = jwtUtil.generateToken(user.getEmail(), user.getPapel());
 
         LoginResponseDTO response = new LoginResponseDTO(
+                user.getId(),
                 token,
                 "Bearer",
                 user.getEmail(),

@@ -3,12 +3,14 @@ package isaf.tfc.autolancamentosbackend.service;
 import isaf.tfc.autolancamentosbackend.dto.AtividadeUtilizadorDTO;
 import isaf.tfc.autolancamentosbackend.dto.LogAuditoriaDTO;
 import isaf.tfc.autolancamentosbackend.dto.PaginaAuditoriaDTO;
+import isaf.tfc.autolancamentosbackend.model.AuditLog;
 import isaf.tfc.autolancamentosbackend.model.DocumentoContabilistico;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 import isaf.tfc.autolancamentosbackend.model.Lancamento;
 import isaf.tfc.autolancamentosbackend.model.OrigemLancamento;
 import isaf.tfc.autolancamentosbackend.model.Role;
 import isaf.tfc.autolancamentosbackend.model.User;
+import isaf.tfc.autolancamentosbackend.repository.AuditLogRepository;
 import isaf.tfc.autolancamentosbackend.repository.DocumentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
@@ -32,6 +34,7 @@ class AuditoriaServiceTest {
     private DocumentoRepository documentoRepository;
     private LancamentoRepository lancamentoRepository;
     private UserRepository userRepository;
+    private AuditLogRepository auditLogRepository;
     private AuditoriaService service;
 
     private final User contabilista = new User(1L, "Ana Costa", "ana@exemplo.com", "5000000001", "ATIVO", "hash", Role.CONTABILISTA, null);
@@ -41,8 +44,10 @@ class AuditoriaServiceTest {
         documentoRepository = Mockito.mock(DocumentoRepository.class);
         lancamentoRepository = Mockito.mock(LancamentoRepository.class);
         userRepository = Mockito.mock(UserRepository.class);
+        auditLogRepository = Mockito.mock(AuditLogRepository.class);
         when(userRepository.findAll()).thenReturn(List.of(contabilista));
-        service = new AuditoriaService(documentoRepository, lancamentoRepository, userRepository);
+        when(auditLogRepository.findAll()).thenReturn(List.of());
+        service = new AuditoriaService(documentoRepository, lancamentoRepository, userRepository, auditLogRepository);
     }
 
     @Test
@@ -195,6 +200,34 @@ class AuditoriaServiceTest {
         assertThat(resumo.get(0).getUltimaAcao()).isEqualTo(LocalDateTime.of(2026, 3, 1, 0, 0));
     }
 
+    // --- eventosDeAuditLog() — Auditoria C06/C07 ---------------------------
+
+    @Test
+    void listarLogs_incluiEventosDaTabelaAuditLogComResultadoEMotivo() {
+        when(documentoRepository.findAll()).thenReturn(List.of());
+        when(lancamentoRepository.findAll()).thenReturn(List.of());
+
+        AuditLog loginFalhado = new AuditLog();
+        loginFalhado.setId(1L);
+        loginFalhado.setUtilizadorNome("intruso@exemplo.com");
+        loginFalhado.setAcao("LOGIN");
+        loginFalhado.setEntidade("User");
+        loginFalhado.setResultado(AuditLogService.FALHA);
+        loginFalhado.setMotivo("Password inválida");
+        loginFalhado.setIp("203.0.113.7");
+        loginFalhado.setTimestamp(LocalDateTime.of(2026, 8, 19, 10, 0));
+        when(auditLogRepository.findAll()).thenReturn(List.of(loginFalhado));
+
+        PaginaAuditoriaDTO pagina = service.listarLogs(null, null);
+
+        assertThat(pagina.getItens()).hasSize(1);
+        LogAuditoriaDTO evento = pagina.getItens().get(0);
+        assertThat(evento.getUtilizador()).isEqualTo("intruso@exemplo.com");
+        assertThat(evento.getResultado()).isEqualTo(AuditLogService.FALHA);
+        assertThat(evento.getMotivo()).isEqualTo("Password inválida");
+        assertThat(evento.getIp()).isEqualTo("203.0.113.7");
+    }
+
     private DocumentoContabilistico documento(Long id, Long userId, String nome, LocalDateTime dataUpload) {
         DocumentoContabilistico documento = new DocumentoContabilistico();
         documento.setId(id);
@@ -209,6 +242,12 @@ class AuditoriaServiceTest {
         lancamento.setId(id);
         lancamento.setOrigem(origem);
         lancamento.setValidadoPor(validadoPor);
+        // Auditoria C01: o evento de criação de um lançamento MANUAL passou
+        // a atribuir-se a criadoPor, não a validadoPor (ver
+        // AuditoriaService.autorDaCriacao) — este helper continua a servir
+        // "um lançamento atribuído a esta pessoa" para os dois casos,
+        // gravando o mesmo id nos dois campos.
+        lancamento.setCriadoPor(validadoPor);
         lancamento.setCriadoEm(criadoEm);
         lancamento.setData(criadoEm.toLocalDate());
         lancamento.setDescricao("Lançamento " + id);

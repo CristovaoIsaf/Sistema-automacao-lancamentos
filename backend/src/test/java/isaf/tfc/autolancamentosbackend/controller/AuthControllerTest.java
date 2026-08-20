@@ -1,5 +1,7 @@
 package isaf.tfc.autolancamentosbackend.controller;
 
+import isaf.tfc.autolancamentosbackend.dto.LoginRequestDTO;
+import isaf.tfc.autolancamentosbackend.dto.LoginResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.RegistoRequestDTO;
 import isaf.tfc.autolancamentosbackend.model.Empresa;
 import isaf.tfc.autolancamentosbackend.model.Role;
@@ -7,6 +9,8 @@ import isaf.tfc.autolancamentosbackend.model.User;
 import isaf.tfc.autolancamentosbackend.repository.EmpresaRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
 import isaf.tfc.autolancamentosbackend.security.JwtUtil;
+import isaf.tfc.autolancamentosbackend.service.AuditLogService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,6 +42,8 @@ class AuthControllerTest {
     private EmpresaRepository empresaRepository;
     private JwtUtil jwtUtil;
     private PasswordEncoder passwordEncoder;
+    private AuditLogService auditLogService;
+    private HttpServletRequest httpRequest;
     private AuthController controller;
 
     @BeforeEach
@@ -45,7 +52,10 @@ class AuthControllerTest {
         empresaRepository = Mockito.mock(EmpresaRepository.class);
         jwtUtil = Mockito.mock(JwtUtil.class);
         passwordEncoder = Mockito.mock(PasswordEncoder.class);
-        controller = new AuthController(userRepository, empresaRepository, jwtUtil, passwordEncoder);
+        auditLogService = Mockito.mock(AuditLogService.class);
+        httpRequest = Mockito.mock(HttpServletRequest.class);
+        when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
+        controller = new AuthController(userRepository, empresaRepository, jwtUtil, passwordEncoder, auditLogService);
 
         when(passwordEncoder.encode(any())).thenReturn("hash-fictício");
         when(jwtUtil.generateToken(any(), any())).thenReturn("token-fictício");
@@ -129,5 +139,88 @@ class AuthControllerTest {
         verify(userRepository).save(userCaptor.capture());
         assertThat(userCaptor.getValue().getSenha()).isEqualTo("hash-fictício");
         verify(passwordEncoder).encode("senhaSegura123");
+    }
+
+    private LoginRequestDTO loginDados() {
+        LoginRequestDTO dto = new LoginRequestDTO();
+        dto.setEmail("ana@empresa.ao");
+        dto.setPassword("senhaCorreta123");
+        return dto;
+    }
+
+    private User utilizadorComStatus(String status) {
+        User user = new User();
+        user.setNome("Ana Contabilista");
+        user.setEmail("ana@empresa.ao");
+        user.setNif("5000000002LA");
+        user.setStatus(status);
+        user.setSenha("hash-armazenado");
+        user.setPapel(Role.CONTABILISTA);
+        return user;
+    }
+
+    // Auditoria C09: um utilizador suspenso (status != "ATIVO") não pode
+    // iniciar sessão, mesmo com a password correta — antes desta correção,
+    // login() nunca olhava para "status" (só existia no modelo, nunca era
+    // lido em lado nenhum), por isso suspender um utilizador não tinha
+    // nenhum efeito prático.
+    @Test
+    void login_utilizadorInativo_rejeitaMesmoComPasswordCorreta() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorComStatus("INATIVO")));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+
+        assertThatThrownBy(() -> controller.login(loginDados(), httpRequest))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("inativo");
+
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
+
+    @Test
+    void login_utilizadorAtivoComPasswordCorreta_devolveToken() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorComStatus("ATIVO")));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+        when(jwtUtil.generateToken("ana@empresa.ao", Role.CONTABILISTA)).thenReturn("token-valido");
+
+        ResponseEntity<LoginResponseDTO> resposta = controller.login(loginDados(), httpRequest);
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resposta.getBody().getToken()).isEqualTo("token-valido");
+    }
+
+    // --- Auditoria C06/C07 — login passa a ficar sempre registado --------
+
+    @Test
+    void login_comSucesso_registaAuditLogDeSucesso() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorComStatus("ATIVO")));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+
+        controller.login(loginDados(), httpRequest);
+
+        verify(auditLogService).registar(any(), org.mockito.ArgumentMatchers.eq("LOGIN"), any(), any(),
+                org.mockito.ArgumentMatchers.eq(AuditLogService.SUCESSO), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("127.0.0.1"));
+    }
+
+    @Test
+    void login_comPasswordErrada_registaAuditLogDeFalha() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorComStatus("ATIVO")));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(false);
+
+        assertThatThrownBy(() -> controller.login(loginDados(), httpRequest)).isInstanceOf(RuntimeException.class);
+
+        verify(auditLogService).registar(any(), org.mockito.ArgumentMatchers.eq("LOGIN"), any(), any(),
+                org.mockito.ArgumentMatchers.eq(AuditLogService.FALHA), any(), org.mockito.ArgumentMatchers.eq("127.0.0.1"));
+    }
+
+    @Test
+    void login_utilizadorInexistente_registaAuditLogComOEmailTentado() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> controller.login(loginDados(), httpRequest)).isInstanceOf(RuntimeException.class);
+
+        verify(auditLogService).registarComEmail(org.mockito.ArgumentMatchers.eq("ana@empresa.ao"),
+                org.mockito.ArgumentMatchers.eq("LOGIN"), org.mockito.ArgumentMatchers.eq(AuditLogService.FALHA),
+                any(), org.mockito.ArgumentMatchers.eq("127.0.0.1"));
     }
 }

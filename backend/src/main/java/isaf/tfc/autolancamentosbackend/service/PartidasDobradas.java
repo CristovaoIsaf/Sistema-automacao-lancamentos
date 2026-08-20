@@ -1,10 +1,13 @@
 package isaf.tfc.autolancamentosbackend.service;
 
+import isaf.tfc.autolancamentosbackend.dto.ContaDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
 import isaf.tfc.autolancamentosbackend.model.LinhaLancamento;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Parsing de valores monetários, construção de linhas e validação de
@@ -79,6 +82,37 @@ public final class PartidasDobradas {
 
         if (totalDebito.compareTo(totalCredito) != 0) {
             throw new RuntimeException("O lançamento não está equilibrado.");
+        }
+    }
+
+    /**
+     * Auditoria C14: até esta correção, nenhum ponto de escrita validava
+     * que a conta de uma linha existe no plano de contas (PGC-AO) — um
+     * lançamento podia ser gravado com um código inventado ou mal escrito.
+     * `planoDeContas` fica a cargo de quem chama (ver PlanoContasClient) —
+     * PartidasDobradas continua sem depender do Spring. Deliberadamente
+     * "fail-open": se o plano de contas ainda não foi carregado (FastAPI
+     * em baixo — ver PlanoContasClient.tentarCarregar), uma lista vazia
+     * salta a validação em vez de bloquear TODOS os lançamentos por uma
+     * dependência externa estar indisponível.
+     */
+    public static void validarContasExistem(List<LinhaLancamento> linhas, List<ContaDTO> planoDeContas) {
+        if (planoDeContas == null || planoDeContas.isEmpty()) {
+            return;
+        }
+        Set<String> codigosValidos = planoDeContas.stream()
+                .map(ContaDTO::getCodigo)
+                .collect(Collectors.toSet());
+
+        List<String> invalidas = linhas.stream()
+                .map(LinhaLancamento::getConta)
+                .filter(conta -> conta == null || !codigosValidos.contains(conta))
+                .map(conta -> conta == null ? "(vazia)" : conta)
+                .distinct()
+                .toList();
+
+        if (!invalidas.isEmpty()) {
+            throw new RuntimeException("Conta inexistente no plano de contas: " + String.join(", ", invalidas));
         }
     }
 

@@ -77,31 +77,36 @@ export function Auditoria() {
               <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#475569] uppercase tracking-wider">Perfil</th>
               <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#475569] uppercase tracking-wider">Ação</th>
               <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#475569] uppercase tracking-wider">Entidade afetada</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#475569] uppercase tracking-wider">Resultado</th>
               <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-[#475569] uppercase tracking-wider">Data / Hora</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
                   <Loader2 className="animate-spin inline-block mr-2" size={14} /> A carregar...
                 </td>
               </tr>
             ) : erro ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#DC2626]">
+                <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#DC2626]">
                   <AlertCircle className="inline-block mr-2" size={14} /> {erro}
                 </td>
               </tr>
             ) : logs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
+                <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#94A3B8]">
                   Ainda não há eventos registados.
                 </td>
               </tr>
             ) : (
               logs.map(log => (
-                <tr key={log.id} className="border-b border-[#F1F5F9] last:border-0 hover:bg-[#F8FAFC] transition-colors">
+                <tr
+                  key={log.id}
+                  className="border-b border-[#F1F5F9] last:border-0 hover:bg-[#F8FAFC] transition-colors"
+                  title={[log.motivo, log.ip ? `IP: ${log.ip}` : null].filter(Boolean).join(' · ') || undefined}
+                >
                   <td className="px-4 py-2.5 text-[13px] text-[#0F172A]">{log.utilizador}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${(log.perfil && perfilBadge[log.perfil]) ?? 'bg-[#F1F5F9] text-[#475569]'}`}>
@@ -110,6 +115,13 @@ export function Auditoria() {
                   </td>
                   <td className="px-4 py-2.5 text-[13px] text-[#475569]">{log.acao}</td>
                   <td className="px-4 py-2.5 text-[13px] text-[#0F172A]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{log.entidade}</td>
+                  <td className="px-4 py-2.5">
+                    {log.resultado && (
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${log.resultado === 'FALHA' ? 'bg-[#FEF2F2] text-[#DC2626]' : 'bg-[#ECFDF5] text-[#059669]'}`}>
+                        {log.resultado === 'FALHA' ? 'Falha' : 'Sucesso'}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right text-[12px] text-[#64748B]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                     {log.dataHora ? new Date(log.dataHora).toLocaleString('pt-AO') : '—'}
                   </td>

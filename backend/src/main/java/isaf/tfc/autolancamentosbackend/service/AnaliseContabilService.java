@@ -30,6 +30,9 @@ public class AnaliseContabilService {
     private final LancamentoEnriquecimentoService enriquecimentoService;
     private final ObjectMapper objectMapper;
 
+    // Auditoria C14 — ver PartidasDobradas.validarContasExistem.
+    private final PlanoContasClient planoContasClient;
+
     public AnaliseContabilService(AnalisadorDocumentoIA analisadorDocumentoIA,
                                    DocumentoRepository documentoRepository,
                                    SugestaoRepository sugestaoRepository,
@@ -37,7 +40,8 @@ public class AnaliseContabilService {
                                    EntidadeService entidadeService,
                                    ContextoClassificacaoService contextoClassificacaoService,
                                    LancamentoEnriquecimentoService enriquecimentoService,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   PlanoContasClient planoContasClient) {
         this.analisadorDocumentoIA = analisadorDocumentoIA;
         this.documentoRepository = documentoRepository;
         this.sugestaoRepository = sugestaoRepository;
@@ -46,6 +50,7 @@ public class AnaliseContabilService {
         this.contextoClassificacaoService = contextoClassificacaoService;
         this.enriquecimentoService = enriquecimentoService;
         this.objectMapper = objectMapper;
+        this.planoContasClient = planoContasClient;
     }
 
     /**
@@ -160,6 +165,7 @@ public class AnaliseContabilService {
             linhas.forEach(linha -> linha.setLancamento(lancamento));
             lancamento.getLinhas().addAll(linhas);
             PartidasDobradas.validarEquilibrio(lancamento.getLinhas());
+            PartidasDobradas.validarContasExistem(lancamento.getLinhas(), planoContasClient.listar());
             lancamento.setEditadoManualmente(request.isEditado());
         } else {
             List<LinhaSugeridaDTO> linhasSugeridas = desserializarLinhas(sugestao.getLinhasJson());
@@ -172,6 +178,7 @@ public class AnaliseContabilService {
                 linha.setDescricao(sugestao.getDescricao());
                 linha.setLancamento(lancamento);
                 lancamento.getLinhas().add(linha);
+                PartidasDobradas.validarContasExistem(lancamento.getLinhas(), planoContasClient.listar());
             } else {
                 for (LinhaSugeridaDTO linhaSugerida : linhasSugeridas) {
                     LinhaLancamento linha = new LinhaLancamento();
@@ -183,6 +190,7 @@ public class AnaliseContabilService {
                     lancamento.getLinhas().add(linha);
                 }
                 PartidasDobradas.validarEquilibrio(lancamento.getLinhas());
+                PartidasDobradas.validarContasExistem(lancamento.getLinhas(), planoContasClient.listar());
             }
         }
 

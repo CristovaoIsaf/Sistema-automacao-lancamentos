@@ -73,6 +73,23 @@ class BalanceteServiceTest {
         assertThat(resposta.getLinhas()).isEmpty();
     }
 
+    // Auditoria C03: um pedido de anulação por resolver ainda não reverteu
+    // o efeito contabilístico do lançamento — tem de continuar a contar,
+    // tal como um VALIDADO, até um segundo contabilista aprovar o pedido
+    // (ver LancamentoServiceImpl.aprovarCancelamento).
+    @Test
+    void gerarBalancete_incluiLancamentosComAnulacaoPendente() {
+        when(lancamentoRepository.findAll()).thenReturn(List.of(
+                lancamentoComLinhas(EstadoLancamento.CANCELAMENTO_PENDENTE, LocalDate.now(),
+                        linha("31", new BigDecimal("100000.00"), null))
+        ));
+
+        BalanceteResponseDTO resposta = service.gerarBalancete(null, null);
+
+        var clientes = resposta.getLinhas().stream().filter(l -> l.getConta().equals("31")).findFirst().orElseThrow();
+        assertThat(clientes.getSaldoDevedor()).isEqualByComparingTo("100000.00");
+    }
+
     @Test
     void gerarBalancete_somaVariosLancamentosNaMesmaConta() {
         when(lancamentoRepository.findAll()).thenReturn(List.of(

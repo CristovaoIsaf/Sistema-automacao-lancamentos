@@ -8,6 +8,8 @@ export interface LoginRequest {
 
 export interface LoginResposta {
 
+    id: number;
+
     token: string;
 
     tipo: string;

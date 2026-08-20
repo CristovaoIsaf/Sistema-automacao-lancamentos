@@ -65,11 +65,31 @@ public class UserService {
             user.setSenha(passwordEncoder.encode(dados.getSenha()));
         }
 
+        // Auditoria C09 — suspender/reativar um utilizador (ver
+        // User.isEnabled(), AuthController.login, JwtAuthFilter). Em falta
+        // ou vazio, mantém o status atual em vez de o apagar.
+        if (dados.getStatus() != null && !dados.getStatus().isBlank()) {
+            user.setStatus(dados.getStatus());
+        }
+
         return converterParaDTO(userRepository.save(user));
     }
 
+    // Auditoria C08: eliminação física de um utilizador não é segura — nem
+    // Lancamento (criadoPor/validadoPor/alteradoPor/cancelamentoSolicitadoPor)
+    // nem DocumentoContabilistico.userId têm FK para "users", por isso a
+    // BD deixava apagar mesmo quando o utilizador tinha lançamentos/uploads
+    // associados — o histórico ficava com o id órfão e a auditoria
+    // derivada (ver AuditoriaService) passava a mostrar "Utilizador
+    // desconhecido" para tudo o que essa pessoa alguma vez fez. Reaproveita
+    // o campo status já usado para suspender (C09): apagar passa a
+    // equivaler a desativar, preservando a identidade no histórico. Como
+    // o registo continua a existir, o email também fica bloqueado para
+    // reutilização (users.email é @Column(unique = true)).
     public void apagar(Long id) {
-        userRepository.delete(buscarEntidade(id));
+        User user = buscarEntidade(id);
+        user.setStatus("INATIVO");
+        userRepository.save(user);
     }
 
     private User buscarEntidade(Long id) {

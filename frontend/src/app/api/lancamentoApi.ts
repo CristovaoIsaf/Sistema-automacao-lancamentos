@@ -1,6 +1,7 @@
 import { apiGet, apiGetBlob, apiPost, apiPut } from "./client";
 
 import type {
+    LancamentoHistoricoVersao,
     LancamentoRequest,
     LancamentoResponse
 } from "../types/lancamento";
@@ -50,6 +51,38 @@ export async function atualizarLancamento(
         dados
     );
 
+}
+
+
+// Auditoria C04 — versões anteriores deste lançamento (uma por cada
+// edição), mais recente primeiro.
+export async function listarHistoricoLancamento(id: number): Promise<LancamentoHistoricoVersao[]> {
+    return apiGet<LancamentoHistoricoVersao[]>(`/api/lancamentos/${id}/historico`);
+}
+
+// Auditoria C01 — aprova um lançamento manual PENDENTE criado por OUTRO
+// contabilista; o backend rejeita (403/erro) se o utilizador autenticado
+// for quem o criou.
+export async function aprovarLancamento(id: number): Promise<LancamentoResponse> {
+    return apiPost<LancamentoResponse>(`/api/lancamentos/${id}/aprovar`, {});
+}
+
+// Auditoria C03 — pede a anulação de um lançamento validado; motivo é
+// obrigatório (ver LancamentoServiceImpl.solicitarCancelamento).
+export async function solicitarCancelamentoLancamento(id: number, motivo: string): Promise<LancamentoResponse> {
+    return apiPost<LancamentoResponse>(`/api/lancamentos/${id}/solicitar-cancelamento`, { motivo });
+}
+
+// Auditoria C03 — aprova o pedido de anulação (por OUTRO contabilista):
+// devolve o lançamento de estorno gerado automaticamente.
+export async function aprovarCancelamentoLancamento(id: number): Promise<LancamentoResponse> {
+    return apiPost<LancamentoResponse>(`/api/lancamentos/${id}/aprovar-cancelamento`, {});
+}
+
+// Auditoria C03 — rejeita o pedido de anulação (por OUTRO contabilista): o
+// lançamento volta a VALIDADO, sem nenhum estorno.
+export async function rejeitarCancelamentoLancamento(id: number): Promise<LancamentoResponse> {
+    return apiPost<LancamentoResponse>(`/api/lancamentos/${id}/rejeitar-cancelamento`, {});
 }
 
 

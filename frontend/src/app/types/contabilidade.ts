@@ -23,6 +23,12 @@ export interface LogAuditoria {
   acao: string;
   entidade: string;
   dataHora: string | null;
+  // Auditoria C06/C07 — só preenchidos para eventos vindos da tabela
+  // AuditLog dedicada (login, gestão de utilizadores, empresa, rejeição
+  // de sugestões); eventos derivados de lançamentos/documentos não têm.
+  resultado?: string | null;
+  motivo?: string | null;
+  ip?: string | null;
 }
 
 export interface Lancamento {

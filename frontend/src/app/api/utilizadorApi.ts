@@ -55,15 +55,30 @@ export async function criarUtilizador(dados: NovoUtilizadorRequest): Promise<Uti
 
 export async function atualizarUtilizador(
   id: string,
-  dados: Partial<Pick<Utilizador, 'nome' | 'email' | 'nif' | 'perfil'>>
+  dados: Partial<Pick<Utilizador, 'nome' | 'email' | 'nif' | 'perfil' | 'ativo'>>
 ): Promise<Utilizador> {
   const atualizado = await apiPut<UtilizadorBackend>(`/api/utilizadores/${id}`, {
     nome: dados.nome,
     email: dados.email,
     nif: dados.nif,
     papel: dados.perfil,
+    status: dados.ativo === undefined ? undefined : (dados.ativo ? 'ATIVO' : 'INATIVO'),
   });
   return converterParaUtilizador(atualizado);
+}
+
+// Auditoria C09 — suspender/reativar sem reescrever os restantes campos:
+// o backend (UserService.atualizar) sobrescreve nome/email/nif/papel a
+// partir do corpo do pedido sem verificação de nulo, por isso este envia
+// sempre os valores atuais do utilizador, só trocando o status.
+export async function alternarEstadoUtilizador(utilizador: Utilizador): Promise<Utilizador> {
+  return atualizarUtilizador(utilizador.id, {
+    nome: utilizador.nome,
+    email: utilizador.email,
+    nif: utilizador.nif,
+    perfil: utilizador.perfil,
+    ativo: !utilizador.ativo,
+  });
 }
 
 export async function apagarUtilizador(id: string): Promise<void> {

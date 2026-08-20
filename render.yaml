@@ -51,6 +51,8 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
       - key: FASTAPI_SERVICES_URL
         value: https://auto-lancamentos-fastapi.onrender.com/api/v1
       - key: ALLOWED_ORIGIN

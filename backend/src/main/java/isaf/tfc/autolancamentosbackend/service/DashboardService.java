@@ -177,6 +177,11 @@ public class DashboardService {
             case VALIDADO -> "aprovado";
             case CANCELADO -> "rejeitado";
             case PENDENTE -> "pendente";
+            // Auditoria C03: ainda ativo (ver BalanceteService), mas o
+            // frontend (Dashboard.tsx) só conhece os 3 estados originais —
+            // "pendente" é a aproximação mais próxima enquanto não tem um
+            // badge dedicado.
+            case CANCELAMENTO_PENDENTE -> "pendente";
         };
     }
 }

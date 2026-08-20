@@ -49,4 +49,37 @@ export interface LancamentoResponse {
 
     validadoPorNome?: string | null;
 
+    // Auditoria C01/C03 — ver LancamentoEnriquecimentoService no backend.
+    criadoPor?: number | null;
+
+    criadoPorNome?: string | null;
+
+    motivoCancelamento?: string | null;
+
+    cancelamentoSolicitadoPor?: number | null;
+
+    cancelamentoSolicitadoPorNome?: string | null;
+
+    estornoDeId?: number | null;
+
+}
+
+// Auditoria C04 — uma versão anterior de um lançamento (ver
+// LancamentoHistoricoDTO no backend).
+export interface LancamentoHistoricoVersao {
+
+    id: number;
+
+    dataAnterior: string;
+
+    descricaoAnterior: string;
+
+    linhasAnteriores: LinhaLancamento[];
+
+    alteradoPor?: number | null;
+
+    alteradoPorNome?: string | null;
+
+    alteradoEm: string;
+
 }

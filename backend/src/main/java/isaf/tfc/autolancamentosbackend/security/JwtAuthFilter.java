@@ -42,11 +42,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (jwtUtil.validateToken(token)) {
                 String email = jwtUtil.extractEmail(token);
 
-                userRepository.findByEmail(email).ifPresent(user -> {
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                });
+                // Auditoria C09: um token só continua a autenticar enquanto o
+                // utilizador estiver ATIVO — suspender uma conta (ver
+                // User.isEnabled()) passa a bloquear pedidos já autenticados
+                // com um token antigo, não só logins novos.
+                userRepository.findByEmail(email)
+                        .filter(User::isEnabled)
+                        .ifPresent(user -> {
+                            UsernamePasswordAuthenticationToken authentication =
+                                    new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                        });
             }
         }
 

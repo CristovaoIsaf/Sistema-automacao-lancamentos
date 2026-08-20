@@ -45,7 +45,15 @@ public class BalanceteService {
      */
     public List<Lancamento> lancamentosValidadosNoIntervalo(LocalDate inicio, LocalDate fim) {
         return lancamentoRepository.findAll().stream()
-                .filter(l -> l.getEstado() == EstadoLancamento.VALIDADO)
+                // Auditoria C03: um lançamento com pedido de anulação por
+                // resolver (CANCELAMENTO_PENDENTE) ainda não foi revertido
+                // — continua a contar como VALIDADO nos relatórios até um
+                // segundo contabilista aprovar o pedido (ver
+                // LancamentoServiceImpl.aprovarCancelamento), senão o saldo
+                // "desaparecia" do Balancete antes de a anulação ser
+                // sequer confirmada.
+                .filter(l -> l.getEstado() == EstadoLancamento.VALIDADO
+                        || l.getEstado() == EstadoLancamento.CANCELAMENTO_PENDENTE)
                 .filter(l -> dentroDoIntervalo(l, inicio, fim))
                 .toList();
     }
