@@ -162,6 +162,32 @@ Os testes do backend usam a mesma base de dados configurada em
 `application.properties` (sem perfil de testes isolado) — corre-os contra uma
 BD de desenvolvimento, não produção.
 
+## Deploy do backend (Railway)
+
+O `backend/` já está pronto para correr como serviço Docker no Railway
+(`backend/railway.json` — builder `DOCKERFILE`, healthcheck em `GET
+/health`). Passos:
+
+1. Cria um novo serviço no Railway a partir deste repositório, com
+   **Root Directory** = `backend` (o Railway detecta o `Dockerfile` e o
+   `railway.json` automaticamente a partir daí).
+2. Cria uma base de dados PostgreSQL no Railway (ou liga uma externa) e
+   define as variáveis abaixo no separador *Variables* do serviço.
+3. O Railway injeta `PORT` automaticamente — não precisa de a definir
+   (`server.port` já lê essa variável).
+
+| Variável | Obrigatória | Valor sugerido | Nota |
+|---|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | **Sim** | `prod` | Sem isto, o backend arranca no perfil `dev` e usa um `jwt.secret` de exemplo commitado no repositório — nunca deixar por definir em produção (ver auditoria C11). |
+| `DB_URL` | Sim | `jdbc:postgresql://<host>:<port>/<db>` | Ligação à Postgres do Railway/externa |
+| `DB_USERNAME` / `DB_PASSWORD` | Sim | — | Credenciais da BD |
+| `JWT_SECRET` | Sim (fora do perfil `dev`) | chave aleatória com ≥32 bytes | Nunca reutilizar a chave de exemplo do `application-dev.properties` |
+| `ALLOWED_ORIGIN` | Sim | URL(s) do frontend, separados por vírgula (ex.: `https://sistema-automacao-lancamentos.vercel.app`) | Ver `CorsConfig.java` |
+| `FASTAPI_SERVICES_URL` | Sim, se a camada de OCR/IA estiver ativa | URL público do serviço FastAPI | Sem isto (ou com o FastAPI em baixo), o backend continua a arrancar — só a análise de documentos falha |
+
+O healthcheck (`GET /health`) é público (não exige autenticação) e
+devolve sempre `200 {"status":"ok"}` assim que a aplicação arranca.
+
 ## Plano de contas
 
 O plano de contas oficial (Decreto n.º 82/01) tem **uma única fonte**:
