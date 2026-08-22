@@ -28,7 +28,8 @@ class JwtSecretRequiredEmProducaoTest {
     void semPerfilDevESemJwtSecret_falhaAoArrancarPorCausaDoPlaceholder() {
         // SPRING_PROFILES_ACTIVE como system property (não .profiles() do
         // builder) para reproduzir fielmente o mecanismo real de produção
-        // (ver render.yaml — a mesma variável de ambiente): é lida por
+        // (a mesma variável de ambiente definida no Railway — ver secção
+        // "Deploy do backend" no README): é lida por
         // spring.profiles.active=${SPRING_PROFILES_ACTIVE:dev} em
         // application.properties antes de qualquer perfil ser resolvido.
         System.setProperty("SPRING_PROFILES_ACTIVE", "prod");

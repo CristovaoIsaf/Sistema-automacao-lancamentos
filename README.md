@@ -73,7 +73,7 @@ valor por omissão para desenvolvimento local — ver
 | `DB_USERNAME` / `DB_PASSWORD` | `postgres` / `123456` | Credenciais da BD |
 | `JWT_SECRET` | chave de exemplo (≥32 bytes) | **Define uma chave própria em produção** |
 | `FASTAPI_SERVICES_URL` | `http://localhost:8000/api/v1` | URL do serviço FastAPI |
-| `ALLOWED_ORIGIN` | `http://localhost:5173` | Origem CORS permitida |
+| `ALLOWED_ORIGIN` | `http://localhost:5173,https://sistema-automacao-lancamentos.vercel.app` | Origens CORS permitidas, separadas por vírgula |
 | `PORT` | `8080` | Porta HTTP |
 
 ### 3. FastAPI (OCR + IA)
@@ -116,13 +116,10 @@ seja `http://localhost:8080`, define `VITE_API_BASE_URL` (ver `.env` do Vite).
 
 ### 5. Primeiro utilizador
 
-Não existe endpoint de registo público nem dados semeados na base de dados —
-a criação de utilizadores exige já estar autenticado como `ADMINISTRADOR`
-(`POST /api/utilizadores`). Para o primeiro acesso, insere uma linha
-diretamente na tabela `users` (campo `senha` com hash BCrypt, `papel` =
-`ADMINISTRADOR`) ou usa um teste JUnit descartável que grave o utilizador via
-`UserRepository`/`PasswordEncoder` — é o padrão seguido ao longo do
-desenvolvimento deste projeto (ver histórico de commits para exemplos).
+`POST /auth/registo` cria o primeiro `ADMINISTRADOR` — mas só funciona
+**enquanto não existir nenhum utilizador** na base de dados (devolve `409`
+depois disso). Depois do primeiro registo, criar utilizadores volta a ser
+um acto exclusivo de `ADMINISTRADOR` via `POST /api/utilizadores`.
 
 ## Camada de IA (opcional)
 
@@ -162,19 +159,41 @@ Os testes do backend usam a mesma base de dados configurada em
 `application.properties` (sem perfil de testes isolado) — corre-os contra uma
 BD de desenvolvimento, não produção.
 
-## Deploy do backend (Railway)
+## Deploy
 
-O `backend/` já está pronto para correr como serviço Docker no Railway
-(`backend/railway.json` — builder `DOCKERFILE`, healthcheck em `GET
-/health`). Passos:
+Uma fonte de verdade por serviço — nada de Render nem ngrok para expor o
+backend, esses foram tentativas anteriores já removidas deste repositório:
+
+| Serviço | Onde | Config no repo |
+|---|---|---|
+| `frontend/` | **Vercel** | Nenhuma (Vercel deteta Vite automaticamente) — variáveis no dashboard do projeto Vercel |
+| `backend/` | **Railway** | `backend/railway.json` + `backend/Dockerfile` |
+| `fastapi/` | **Railway** | `fastapi/railway.json` + `fastapi/Dockerfile` |
+
+### Frontend (Vercel)
+
+Já publicado em `sistema-automacao-lancamentos.vercel.app` — configuração
+gerida inteiramente no dashboard da Vercel, não neste repositório.
+
+| Variável | Onde configurar | Valor |
+|---|---|---|
+| `VITE_API_BASE_URL` | Dashboard Vercel → Settings → Environment Variables | URL público do serviço `backend` no Railway |
+
+`frontend/.env` (local, nunca commitado) serve **só** para `npm run dev`
+— por omissão aponta para `http://localhost:8080`. Ver
+`frontend/.env.example`.
+
+### Backend (Railway)
+
+`backend/railway.json` já define o builder (`DOCKERFILE`) e o healthcheck
+(`GET /health`, público — não exige autenticação, devolve sempre
+`200 {"status":"ok"}` assim que a aplicação arranca).
 
 1. Cria um novo serviço no Railway a partir deste repositório, com
-   **Root Directory** = `backend` (o Railway detecta o `Dockerfile` e o
-   `railway.json` automaticamente a partir daí).
-2. Cria uma base de dados PostgreSQL no Railway (ou liga uma externa) e
-   define as variáveis abaixo no separador *Variables* do serviço.
-3. O Railway injeta `PORT` automaticamente — não precisa de a definir
-   (`server.port` já lê essa variável).
+   **Root Directory** = `backend`.
+2. Cria uma base de dados PostgreSQL no Railway (ou liga uma externa).
+3. Define as variáveis abaixo no separador *Variables* do serviço —
+   `PORT` é injetada automaticamente, não precisa de a definir.
 
 | Variável | Obrigatória | Valor sugerido | Nota |
 |---|---|---|---|
@@ -182,11 +201,23 @@ O `backend/` já está pronto para correr como serviço Docker no Railway
 | `DB_URL` | Sim | `jdbc:postgresql://<host>:<port>/<db>` | Ligação à Postgres do Railway/externa |
 | `DB_USERNAME` / `DB_PASSWORD` | Sim | — | Credenciais da BD |
 | `JWT_SECRET` | Sim (fora do perfil `dev`) | chave aleatória com ≥32 bytes | Nunca reutilizar a chave de exemplo do `application-dev.properties` |
-| `ALLOWED_ORIGIN` | Sim | URL(s) do frontend, separados por vírgula (ex.: `https://sistema-automacao-lancamentos.vercel.app`) | Ver `CorsConfig.java` |
-| `FASTAPI_SERVICES_URL` | Sim, se a camada de OCR/IA estiver ativa | URL público do serviço FastAPI | Sem isto (ou com o FastAPI em baixo), o backend continua a arrancar — só a análise de documentos falha |
+| `ALLOWED_ORIGIN` | Sim | `https://sistema-automacao-lancamentos.vercel.app` (acrescenta outras origens separadas por vírgula, se precisares) | Ver `CorsConfig.java` |
+| `FASTAPI_SERVICES_URL` | Sim, se a camada de OCR/IA estiver ativa | URL público do serviço `fastapi` no Railway | Sem isto (ou com o FastAPI em baixo), o backend continua a arrancar — só a análise de documentos falha |
 
-O healthcheck (`GET /health`) é público (não exige autenticação) e
-devolve sempre `200 {"status":"ok"}` assim que a aplicação arranca.
+### FastAPI (Railway)
+
+`fastapi/railway.json` define o mesmo builder/healthcheck que o backend.
+Cria um segundo serviço Railway com **Root Directory** = `fastapi`.
+
+| Variável | Obrigatória | Nota |
+|---|---|---|
+| `TESSERACT_CMD` | Não | Já vem instalado na imagem Docker (`tesseract-ocr` via `apt-get`) — não precisas de definir esta variável em produção, só em Windows local |
+| `GEMINI_API_KEY` | Não | Só necessária para a camada de IA — ver [Camada de IA](#camada-de-ia-opcional) |
+| `ANYTHINGLLM_BASE_URL` / `ANYTHINGLLM_API_KEY` / `ANYTHINGLLM_WORKSPACE_NORMAS` / `ANYTHINGLLM_WORKSPACE_EXEMPLOS` | Não | Idem. Se o AnythingLLM só correr localmente, `ANYTHINGLLM_BASE_URL` tem de ser um túnel público (ex.: ngrok) até ao Railway — este é o único uso de ngrok que continua válido neste projeto; **não é preciso** para expor o próprio backend/fastapi, que passam a estar hospedados diretamente no Railway |
+
+Sem as variáveis `ANYTHINGLLM_*`/`GEMINI_API_KEY`, o serviço continua a
+funcionar — cai sempre no fallback por regras determinísticas (ver
+[Camada de IA](#camada-de-ia-opcional)).
 
 ## Plano de contas
 
@@ -210,4 +241,5 @@ decreto original é anterior à introdução do IVA em Angola.
   pendente de aplicação, e sem Ativo Não Corrente modelado o Balanço pode
   ainda não fechar exatamente a zero (ver campo `diferenca` na resposta
   da API).
-- Sem endpoint de registo público (ver [Primeiro utilizador](#5-primeiro-utilizador)).
+- Registo público (`POST /auth/registo`) só funciona uma vez, para o
+  primeiro `ADMINISTRADOR` — ver [Primeiro utilizador](#5-primeiro-utilizador).

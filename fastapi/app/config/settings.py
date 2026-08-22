@@ -44,11 +44,14 @@ class Settings(BaseSettings):
     APP_DESCRIPTION: str = "Serviço de OCR e IA para automação contábil de PME angolanas"
     DEBUG: bool = True
 
-    # CORS
+    # CORS — origens de BROWSER (páginas), nunca chamadas servidor-a-servidor
+    # (o Spring Boot chama este serviço diretamente, isso não passa pelo CORS
+    # do browser, por isso a porta do backend não pertence aqui). Sobreponível
+    # via variável de ambiente ALLOWED_ORIGINS (lista JSON) se um dia for
+    # preciso, mas hoje nenhum ambiente a define.
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:5173",  # React+Vite dev
-        "http://localhost:3000",
-        "http://localhost:8080",  # Spring Boot
+        "https://sistema-automacao-lancamentos.vercel.app",  # frontend em produção (Vercel)
     ]
 
     # Tesseract OCR

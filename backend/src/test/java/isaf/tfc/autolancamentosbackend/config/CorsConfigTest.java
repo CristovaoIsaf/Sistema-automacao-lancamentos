@@ -14,10 +14,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * allowed.origin passou a aceitar uma lista separada por vírgulas (ver
- * CorsConfig) — o backend local costuma ser exposto a mais do que um
- * frontend ao mesmo tempo (Vite em localhost:5173 + o frontend publicado
- * na Vercel, ambos através de um túnel ngrok). Confirma com um pedido
- * OPTIONS (preflight) real que as duas origens da lista por omissão
+ * CorsConfig) — o backend (Railway) é acedido a partir de mais do que um
+ * frontend ao mesmo tempo (Vite em localhost:5173 em dev + o frontend
+ * publicado na Vercel em produção). Confirma com um pedido OPTIONS
+ * (preflight) real que as duas origens da lista por omissão
  * (application.properties) são aceites e uma origem qualquer não.
  */
 @SpringBootTest

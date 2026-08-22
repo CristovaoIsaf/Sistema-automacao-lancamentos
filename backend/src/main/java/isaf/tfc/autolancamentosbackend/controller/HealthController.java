@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * Endpoint de healthcheck para a plataforma de hosting (Railway/Render) —
+ * Endpoint de healthcheck para a plataforma de hosting (Railway) —
  * sem isto não havia nenhum endpoint público (ver SecurityConfig,
  * .anyRequest().authenticated()) que a plataforma pudesse chamar para
  * confirmar que o processo arrancou, e um healthcheck a bater num
