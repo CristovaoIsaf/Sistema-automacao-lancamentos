@@ -101,6 +101,15 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
+            <!-- Autenticação de dois factores (TOTP, RFC 6238) — geração/
+                 verificação de código e do segredo Base32; o QR code em si é
+                 gerado no frontend a partir do URI otpauth:// devolvido pela
+                 API, para não trazer o ZXing (geração de imagem) para o backend. -->
+            <groupId>dev.samstevens.totp</groupId>
+            <artifactId>totp</artifactId>
+            <version>1.7.1</version>
+        </dependency>
+        <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <scope>runtime</scope>

@@ -10,6 +10,7 @@ import isaf.tfc.autolancamentosbackend.repository.EmpresaRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
 import isaf.tfc.autolancamentosbackend.security.JwtUtil;
 import isaf.tfc.autolancamentosbackend.service.AuditLogService;
+import isaf.tfc.autolancamentosbackend.service.TwoFactorAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,6 +30,7 @@ public class AuthController {
     // Auditoria C06/C07 — login nunca tinha nenhum registo, sucesso ou
     // falha (ver AuditLog).
     private final AuditLogService auditLogService;
+    private final TwoFactorAuthService twoFactorAuthService;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDTO> login(@RequestBody LoginRequestDTO dto, HttpServletRequest httpRequest) {
@@ -50,6 +52,22 @@ public class AuthController {
         if (!user.isEnabled()) {
             auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.FALHA, "Utilizador inativo", ip);
             throw new RuntimeException("Utilizador inativo");
+        }
+
+        // 2FA: só chega aqui depois de password (e status) já validados —
+        // um código errado ou em falta nunca deve revelar se a password
+        // estava certa ou não, e a mensagem "requer 2FA" já implica que
+        // sim (por isso não há caminho para adivinhar a password por aqui).
+        if (user.isTwoFactorEnabled()) {
+            String codigo = dto.getCodigo2FA();
+            if (codigo == null || codigo.isBlank()) {
+                auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.SUCESSO, "aguarda código 2FA", ip);
+                return ResponseEntity.ok(LoginResponseDTO.exigeDoisFactores());
+            }
+            if (!twoFactorAuthService.verificarLoginComDoisFactores(user, codigo)) {
+                auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.FALHA, "Código 2FA inválido", ip);
+                throw new RuntimeException("Código de autenticação inválido");
+            }
         }
 
         auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.SUCESSO, null, ip);

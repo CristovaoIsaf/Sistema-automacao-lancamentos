@@ -56,6 +56,23 @@ public class User implements UserDetails {
     // este projecto é single-tenant, não multi-empresa.
     private Long empresaId;
 
+    // Autenticação de dois factores (TOTP, RFC 6238) — ver
+    // TwoFactorAuthService. twoFactorSecret fica preenchido assim que o
+    // utilizador inicia o setup (GET/POST /api/2fa/setup), mas
+    // twoFactorEnabled só passa a true depois de confirmar um código válido
+    // (POST /api/2fa/confirmar) — até lá, o login continua a não exigir
+    // nada além da password. twoFactorRecoveryCodesJson guarda os códigos
+    // de recuperação já com hash (BCrypt, nunca em texto simples — mesmo
+    // padrão da própria password), um por cada tentativa de uso.
+    @Column(name = "two_factor_secret")
+    private String twoFactorSecret;
+
+    @Column(name = "two_factor_enabled", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean twoFactorEnabled;
+
+    @Column(name = "two_factor_recovery_codes", columnDefinition = "TEXT")
+    private String twoFactorRecoveryCodesJson;
+
 
     // Antes devolvia sempre List.of() — nenhum papel era exposto ao Spring
     // Security, por isso hasRole()/@PreAuthorize nunca tinham nada para

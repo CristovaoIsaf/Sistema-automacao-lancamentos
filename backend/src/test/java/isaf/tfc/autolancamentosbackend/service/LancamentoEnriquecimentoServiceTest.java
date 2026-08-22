@@ -65,7 +65,7 @@ class LancamentoEnriquecimentoServiceTest {
         Entidade entidade = new Entidade(30L, "Fornecedor XPTO", "5417000111", TipoEntidade.FORNECEDOR);
         when(entidadeRepository.findAllById(List.of(30L))).thenReturn(List.of(entidade));
 
-        User validador = new User(1L, "Ana Costa", "ana@exemplo.com", "5000000001", "ATIVO", "hash", Role.CONTABILISTA, null);
+        User validador = new User(1L, "Ana Costa", "ana@exemplo.com", "5000000001", "ATIVO", "hash", Role.CONTABILISTA, null, null, false, null);
         when(userRepository.findAllById(List.of(1L))).thenReturn(List.of(validador));
 
         Lancamento lancamento = new Lancamento();
@@ -88,7 +88,7 @@ class LancamentoEnriquecimentoServiceTest {
 
     @Test
     void converter_lancamentoManual_semSugestao_ficaSemEntidadeMasComUtilizador() {
-        User criador = new User(2L, "Bruno Neto", "bruno@exemplo.com", "5000000002", "ATIVO", "hash", Role.CONTABILISTA, null);
+        User criador = new User(2L, "Bruno Neto", "bruno@exemplo.com", "5000000002", "ATIVO", "hash", Role.CONTABILISTA, null, null, false, null);
         when(userRepository.findAllById(List.of(2L))).thenReturn(List.of(criador));
         when(sugestaoRepository.findAllById(List.of())).thenReturn(List.of());
 

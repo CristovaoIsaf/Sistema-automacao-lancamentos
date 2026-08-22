@@ -10,6 +10,7 @@ import isaf.tfc.autolancamentosbackend.repository.EmpresaRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
 import isaf.tfc.autolancamentosbackend.security.JwtUtil;
 import isaf.tfc.autolancamentosbackend.service.AuditLogService;
+import isaf.tfc.autolancamentosbackend.service.TwoFactorAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ class AuthControllerTest {
     private JwtUtil jwtUtil;
     private PasswordEncoder passwordEncoder;
     private AuditLogService auditLogService;
+    private TwoFactorAuthService twoFactorAuthService;
     private HttpServletRequest httpRequest;
     private AuthController controller;
 
@@ -53,9 +55,10 @@ class AuthControllerTest {
         jwtUtil = Mockito.mock(JwtUtil.class);
         passwordEncoder = Mockito.mock(PasswordEncoder.class);
         auditLogService = Mockito.mock(AuditLogService.class);
+        twoFactorAuthService = Mockito.mock(TwoFactorAuthService.class);
         httpRequest = Mockito.mock(HttpServletRequest.class);
         when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
-        controller = new AuthController(userRepository, empresaRepository, jwtUtil, passwordEncoder, auditLogService);
+        controller = new AuthController(userRepository, empresaRepository, jwtUtil, passwordEncoder, auditLogService, twoFactorAuthService);
 
         when(passwordEncoder.encode(any())).thenReturn("hash-fictício");
         when(jwtUtil.generateToken(any(), any())).thenReturn("token-fictício");
@@ -222,5 +225,69 @@ class AuthControllerTest {
         verify(auditLogService).registarComEmail(org.mockito.ArgumentMatchers.eq("ana@empresa.ao"),
                 org.mockito.ArgumentMatchers.eq("LOGIN"), org.mockito.ArgumentMatchers.eq(AuditLogService.FALHA),
                 any(), org.mockito.ArgumentMatchers.eq("127.0.0.1"));
+    }
+
+    // --- 2FA -------------------------------------------------------------
+
+    private User utilizadorCom2FA() {
+        User user = utilizadorComStatus("ATIVO");
+        user.setTwoFactorEnabled(true);
+        user.setTwoFactorSecret("segredo-fictício");
+        return user;
+    }
+
+    @Test
+    void login_comDoisFactoresAtivosESemCodigo_devolveRequiresTwoFactorSemToken() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorCom2FA()));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+
+        ResponseEntity<LoginResponseDTO> resposta = controller.login(loginDados(), httpRequest);
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resposta.getBody().isRequiresTwoFactor()).isTrue();
+        assertThat(resposta.getBody().getToken()).isNull();
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
+
+    @Test
+    void login_comDoisFactoresAtivosECodigoErrado_lancaExcecaoENaoEmiteToken() {
+        LoginRequestDTO dados = loginDados();
+        dados.setCodigo2FA("000000");
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorCom2FA()));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+        when(twoFactorAuthService.verificarLoginComDoisFactores(any(), org.mockito.ArgumentMatchers.eq("000000")))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> controller.login(dados, httpRequest))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Código de autenticação inválido");
+
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
+
+    @Test
+    void login_comDoisFactoresAtivosECodigoCorreto_emiteToken() {
+        LoginRequestDTO dados = loginDados();
+        dados.setCodigo2FA("123456");
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorCom2FA()));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+        when(twoFactorAuthService.verificarLoginComDoisFactores(any(), org.mockito.ArgumentMatchers.eq("123456")))
+                .thenReturn(true);
+        when(jwtUtil.generateToken("ana@empresa.ao", Role.CONTABILISTA)).thenReturn("token-valido");
+
+        ResponseEntity<LoginResponseDTO> resposta = controller.login(dados, httpRequest);
+
+        assertThat(resposta.getBody().isRequiresTwoFactor()).isFalse();
+        assertThat(resposta.getBody().getToken()).isEqualTo("token-valido");
+    }
+
+    @Test
+    void login_semDoisFactoresAtivos_naoChamaTwoFactorAuthService() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorComStatus("ATIVO")));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+
+        controller.login(loginDados(), httpRequest);
+
+        verify(twoFactorAuthService, never()).verificarLoginComDoisFactores(any(), any());
     }
 }

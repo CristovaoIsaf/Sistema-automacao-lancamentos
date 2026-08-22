@@ -37,7 +37,7 @@ class AuditoriaServiceTest {
     private AuditLogRepository auditLogRepository;
     private AuditoriaService service;
 
-    private final User contabilista = new User(1L, "Ana Costa", "ana@exemplo.com", "5000000001", "ATIVO", "hash", Role.CONTABILISTA, null);
+    private final User contabilista = new User(1L, "Ana Costa", "ana@exemplo.com", "5000000001", "ATIVO", "hash", Role.CONTABILISTA, null, null, false, null);
 
     @BeforeEach
     void setUp() {
@@ -133,7 +133,7 @@ class AuditoriaServiceTest {
         // Fase 16 — "alterações": editar não deve fingir ser criação; deve
         // aparecer como um segundo evento, atribuído a quem editou (que
         // pode ser diferente de quem criou/aprovou).
-        User administrador = new User(2L, "Beatriz Neto", "beatriz@exemplo.com", "5000000002", "ATIVO", "hash", Role.ADMINISTRADOR, null);
+        User administrador = new User(2L, "Beatriz Neto", "beatriz@exemplo.com", "5000000002", "ATIVO", "hash", Role.ADMINISTRADOR, null, null, false, null);
         when(userRepository.findAll()).thenReturn(List.of(contabilista, administrador));
         when(documentoRepository.findAll()).thenReturn(List.of());
 
