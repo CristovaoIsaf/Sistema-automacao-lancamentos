@@ -17,6 +17,7 @@ import { LivroRazao } from "./pages/LivroRazao";
 import { ExportacaoSAFT } from "./pages/ExportacaoSAFT";
 import { Utilizadores } from "./pages/Utilizadores";
 import { Auditoria } from "./pages/Auditoria";
+import { ContaSeguranca } from "./pages/ContaSeguranca";
 import { Layout } from "./components/Layout";
 import { RotaProtegida } from "./auth/RotaProtegida";
 
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
       { path: "utilizadores", element: <RotaProtegida><Utilizadores /></RotaProtegida> },
       { path: "auditoria", element: <RotaProtegida><Auditoria /></RotaProtegida> },
       { path: "configuracoes", element: <RotaProtegida><Configuracoes /></RotaProtegida> },
+      { path: "minha-conta", element: <RotaProtegida><ContaSeguranca /></RotaProtegida> },
     ],
   },
 ]);

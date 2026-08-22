@@ -4,6 +4,8 @@ export interface LoginRequest {
 
     password: string;
 
+    codigo2FA?: string;
+
 }
 
 export interface LoginResposta {
@@ -19,5 +21,7 @@ export interface LoginResposta {
     nome: string;
 
     papel: string;
+
+    requiresTwoFactor: boolean;
 
 }

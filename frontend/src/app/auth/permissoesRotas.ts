@@ -33,4 +33,8 @@ export const PERFIS_POR_ROTA: Record<string, Perfil[]> = {
   '/utilizadores': ['ADMINISTRADOR', 'AUDITOR'],
   '/auditoria': ['ADMINISTRADOR', 'AUDITOR'],
   '/configuracoes': ['ADMINISTRADOR'],
+  // Segurança da própria conta (2FA) — qualquer perfil autenticado gere a
+  // sua própria, não é um privilégio de Administrador (ver
+  // TwoFactorController.java, sem @PreAuthorize).
+  '/minha-conta': TODOS,
 };

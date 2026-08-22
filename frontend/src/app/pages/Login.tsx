@@ -11,6 +11,11 @@ export function Login() {
   const [senha, setSenha] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  // 2o passo do login (ver AuthContext.login) — só aparece quando o
+  // utilizador tem 2FA activo. Nesse ponto email/senha já foram aceites
+  // pelo backend, falta só o código TOTP (ou um código de recuperação).
+  const [pedeCodigo2FA, setPedeCodigo2FA] = useState(false);
+  const [codigo2FA, setCodigo2FA] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,11 +25,33 @@ export function Login() {
     }
     setLoading(true);
     try {
-      await login(email, senha);
+      const resultado = await login(email, senha);
+      if (resultado.requiresTwoFactor) {
+        setPedeCodigo2FA(true);
+        return;
+      }
       toast.success('Bem-vindo ao ContaIA');
       navigate('/');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao iniciar sessão');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmarCodigo2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!codigo2FA) {
+      toast.error('Introduza o código de autenticação');
+      return;
+    }
+    setLoading(true);
+    try {
+      await login(email, senha, codigo2FA);
+      toast.success('Bem-vindo ao ContaIA');
+      navigate('/');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Código inválido');
     } finally {
       setLoading(false);
     }
@@ -48,66 +75,107 @@ export function Login() {
             <p className="text-[#475569] text-[13px] mt-2">Sistema de Automação Contabilística</p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-[12px] font-medium text-[#475569] mb-1.5">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="contador@empresa.ao"
-                className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[12px] font-medium text-[#475569]">
-                  Senha
+          {pedeCodigo2FA ? (
+            <form onSubmit={handleConfirmarCodigo2FA} className="space-y-4">
+              <div>
+                <label className="block text-[12px] font-medium text-[#475569] mb-1.5">
+                  Código de autenticação
                 </label>
-                <a href="#" className="text-[12px] text-[#2563EB] hover:text-[#1D4ED8] transition-colors">
-                  Esqueceu a senha?
-                </a>
-              </div>
-              <div className="relative">
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={senha}
-                  onChange={e => setSenha(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full h-8 px-3 pr-9 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  value={codigo2FA}
+                  onChange={e => setCodigo2FA(e.target.value)}
+                  placeholder="123456"
+                  className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+                  style={{ fontFamily: 'JetBrains Mono, monospace', letterSpacing: '2px' }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#475569] transition-colors"
-                >
-                  {showPassword ? <EyeOff style={{ width: 14, height: 14 }} /> : <Eye style={{ width: 14, height: 14 }} />}
-                </button>
+                <p className="text-[11px] text-[#94A3B8] mt-1.5">
+                  Introduza o código de 6 dígitos da app de autenticação, ou um código de recuperação.
+                </p>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-8 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 text-white text-[13px] font-medium rounded-md transition-colors mt-2"
-            >
-              {loading ? 'A entrar...' : 'Entrar'}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-8 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 text-white text-[13px] font-medium rounded-md transition-colors mt-2"
+              >
+                {loading ? 'A verificar...' : 'Confirmar'}
+              </button>
 
-          {/* Footer card */}
-          <div className="mt-6 pt-5 border-t border-[#E2E8F0]">
-            <p className="text-[11px] text-[#94A3B8] text-center mt-2">
-              Ainda não tem conta?{' '}
-              <Link to="/cadastro" className="text-[#2563EB] hover:text-[#1D4ED8] transition-colors">
-                Criar conta
-              </Link>
-            </p>
-          </div>
+              <button
+                type="button"
+                onClick={() => { setPedeCodigo2FA(false); setCodigo2FA(''); }}
+                className="w-full text-[12px] text-[#475569] hover:text-[#0F172A] transition-colors"
+              >
+                Voltar
+              </button>
+            </form>
+          ) : (
+            <>
+              {/* Form */}
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-[12px] font-medium text-[#475569] mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="contador@empresa.ao"
+                    className="w-full h-8 px-3 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[12px] font-medium text-[#475569]">
+                      Senha
+                    </label>
+                    <a href="#" className="text-[12px] text-[#2563EB] hover:text-[#1D4ED8] transition-colors">
+                      Esqueceu a senha?
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={senha}
+                      onChange={e => setSenha(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full h-8 px-3 pr-9 text-[13px] border border-[#E2E8F0] rounded-md bg-white text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-[3px] focus:ring-[#EFF6FF] transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#475569] transition-colors"
+                    >
+                      {showPassword ? <EyeOff style={{ width: 14, height: 14 }} /> : <Eye style={{ width: 14, height: 14 }} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-8 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 text-white text-[13px] font-medium rounded-md transition-colors mt-2"
+                >
+                  {loading ? 'A entrar...' : 'Entrar'}
+                </button>
+              </form>
+
+              {/* Footer card */}
+              <div className="mt-6 pt-5 border-t border-[#E2E8F0]">
+                <p className="text-[11px] text-[#94A3B8] text-center mt-2">
+                  Ainda não tem conta?{' '}
+                  <Link to="/cadastro" className="text-[#2563EB] hover:text-[#1D4ED8] transition-colors">
+                    Criar conta
+                  </Link>
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Version */}

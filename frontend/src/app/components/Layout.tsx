@@ -17,6 +17,7 @@ import {
   Bell,
   Search,
   LogOut,
+  Shield,
   ScrollText,
   FolderOpen,
   NotebookPen,
@@ -185,6 +186,9 @@ export function Layout() {
                   <p className="text-[#CBD5E1] text-[12px] font-medium truncate">{utilizador.nome}</p>
                   <p className="text-[#64748B] text-[11px] truncate">{perfilLabel}</p>
                 </div>
+                <Link to="/minha-conta" className="text-[#64748B] hover:text-[#CBD5E1] transition-colors" title="A minha conta (2FA)">
+                  <Shield className="w-3.5 h-3.5" />
+                </Link>
                 <button onClick={handleLogout} className="text-[#64748B] hover:text-[#CBD5E1] transition-colors" title="Terminar sessão">
                   <LogOut className="w-3.5 h-3.5" />
                 </button>

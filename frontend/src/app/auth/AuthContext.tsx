@@ -13,7 +13,7 @@ interface AuthContextValue {
   utilizador: Utilizador;
   perfil: Perfil;
   autenticado: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, codigo2FA?: string) => Promise<{ requiresTwoFactor: boolean }>;
   registar: (dados: CadastroRequest) => Promise<void>;
   logout: () => void;
 }
@@ -56,8 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAutenticado(true);
   }
 
-  async function login(email: string, password: string) {
-    aplicarSessao(await apiLogin(email, password));
+  // 2FA: a 1a chamada (sem codigo2FA) devolve requiresTwoFactor=true e
+  // nenhum token quando o utilizador tem 2FA activo — o chamador (Login.tsx)
+  // pede então o código e chama login() outra vez com codigo2FA preenchido.
+  // Só quando requiresTwoFactor vier false é que a sessão fica aplicada.
+  async function login(email: string, password: string, codigo2FA?: string) {
+    const resp = await apiLogin(email, password, codigo2FA);
+    if (resp.requiresTwoFactor) {
+      return { requiresTwoFactor: true };
+    }
+    aplicarSessao(resp);
+    return { requiresTwoFactor: false };
   }
 
   // Fase 20 do plano de 20 fases — POST /auth/registo devolve a mesma

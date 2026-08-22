@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Save, Eye, EyeOff } from 'lucide-react';
+import { Link } from 'react-router';
+import { Save, Eye, EyeOff, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { obterEmpresa, atualizarEmpresa } from '../api/empresaApi';
 import type { Empresa } from '../types/empresa';
@@ -37,7 +38,10 @@ export function Configuracoes() {
   const [activeTab, setActiveTab] = useState<Tab>('geral');
   const [showApiKey, setShowApiKey] = useState(false);
   const [notifs, setNotifs] = useState({ prazos: true, lancamentos: true, erros: true, relatorios: false });
-  const [seg, setSeg] = useState({ dual2fa: false, auditoria: true, aprovacaoDual: true });
+  // dual2fa saiu daqui — 2FA é uma acção sobre a própria conta de cada
+  // utilizador (ver ContaSeguranca.tsx / TwoFactorController.java), não
+  // uma política global do sistema, que o backend nem sequer suporta.
+  const [seg, setSeg] = useState({ auditoria: true, aprovacaoDual: true });
 
   // Fase 2 — "Dados da Empresa" era 100% mock (só toast.success ao
   // "Guardar", sem ligação nenhuma ao backend). Passa a carregar/guardar
@@ -226,8 +230,17 @@ export function Configuracoes() {
             <h2 className="text-[13px] font-semibold text-[#0F172A]">Segurança e Auditoria</h2>
           </div>
           <div className="p-4 space-y-0">
+            <Link
+              to="/minha-conta"
+              className="flex items-center justify-between py-3 border-b border-[#F1F5F9] group"
+            >
+              <div>
+                <p className="text-[13px] font-medium text-[#0F172A]">Autenticação de dois factores</p>
+                <p className="text-[12px] text-[#475569]">Gerida individualmente por cada utilizador em "A minha conta"</p>
+              </div>
+              <ChevronRight style={{ width: 14, height: 14 }} className="text-[#94A3B8] group-hover:text-[#475569] transition-colors" />
+            </Link>
             {[
-              { key: 'dual2fa', label: 'Autenticação de dois factores', desc: 'Exigir 2FA para todos os utilizadores' },
               { key: 'auditoria', label: 'Registo de auditoria', desc: 'Registar todas as acções no sistema' },
               { key: 'aprovacaoDual', label: 'Aprovação dual', desc: 'Lançamentos acima de AOA 5.000.000 requerem aprovação dupla' },
             ].map(item => (
