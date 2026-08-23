@@ -9,6 +9,7 @@ import isaf.tfc.autolancamentosbackend.model.User;
 import isaf.tfc.autolancamentosbackend.repository.EmpresaRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
 import isaf.tfc.autolancamentosbackend.security.JwtUtil;
+import isaf.tfc.autolancamentosbackend.security.LoginRateLimiter;
 import isaf.tfc.autolancamentosbackend.service.AuditLogService;
 import isaf.tfc.autolancamentosbackend.service.TwoFactorAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/auth")
@@ -31,18 +33,33 @@ public class AuthController {
     // falha (ver AuditLog).
     private final AuditLogService auditLogService;
     private final TwoFactorAuthService twoFactorAuthService;
+    private final LoginRateLimiter loginRateLimiter;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDTO> login(@RequestBody LoginRequestDTO dto, HttpServletRequest httpRequest) {
         String ip = httpRequest.getRemoteAddr();
 
+        // Confirmado ao vivo (auditoria de segurança): sem isto, tanto a
+        // password como o código 2FA aceitavam tentativas ilimitadas sem
+        // qualquer atraso — um código TOTP de 6 dígitos (1M combinações)
+        // era assim atacável por força bruta dentro da sua janela de
+        // validade. A chave é sempre o email, por isso cobre os dois
+        // passos do login (password e código 2FA) com o mesmo bloqueio.
+        if (loginRateLimiter.estaBloqueado(dto.getEmail())) {
+            auditLogService.registarComEmail(dto.getEmail(), "LOGIN", AuditLogService.FALHA, "Bloqueado por excesso de tentativas falhadas", ip);
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Demasiadas tentativas falhadas. Tente novamente mais tarde.");
+        }
+
         User user = userRepository.findByEmail(dto.getEmail()).orElse(null);
         if (user == null) {
+            loginRateLimiter.registarFalha(dto.getEmail());
             auditLogService.registarComEmail(dto.getEmail(), "LOGIN", AuditLogService.FALHA, "Utilizador não encontrado", ip);
             throw new RuntimeException("Utilizador não encontrado");
         }
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+            loginRateLimiter.registarFalha(dto.getEmail());
             auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.FALHA, "Password inválida", ip);
             throw new RuntimeException("Senha inválida");
         }
@@ -65,11 +82,13 @@ public class AuthController {
                 return ResponseEntity.ok(LoginResponseDTO.exigeDoisFactores());
             }
             if (!twoFactorAuthService.verificarLoginComDoisFactores(user, codigo)) {
+                loginRateLimiter.registarFalha(dto.getEmail());
                 auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.FALHA, "Código 2FA inválido", ip);
                 throw new RuntimeException("Código de autenticação inválido");
             }
         }
 
+        loginRateLimiter.registarSucesso(dto.getEmail());
         auditLogService.registar(user, "LOGIN", "User", user.getId(), AuditLogService.SUCESSO, null, ip);
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getPapel());

@@ -9,6 +9,7 @@ import isaf.tfc.autolancamentosbackend.model.User;
 import isaf.tfc.autolancamentosbackend.repository.EmpresaRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
 import isaf.tfc.autolancamentosbackend.security.JwtUtil;
+import isaf.tfc.autolancamentosbackend.security.LoginRateLimiter;
 import isaf.tfc.autolancamentosbackend.service.AuditLogService;
 import isaf.tfc.autolancamentosbackend.service.TwoFactorAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,6 +20,7 @@ import org.mockito.Mockito;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +47,7 @@ class AuthControllerTest {
     private PasswordEncoder passwordEncoder;
     private AuditLogService auditLogService;
     private TwoFactorAuthService twoFactorAuthService;
+    private LoginRateLimiter loginRateLimiter;
     private HttpServletRequest httpRequest;
     private AuthController controller;
 
@@ -56,9 +59,13 @@ class AuthControllerTest {
         passwordEncoder = Mockito.mock(PasswordEncoder.class);
         auditLogService = Mockito.mock(AuditLogService.class);
         twoFactorAuthService = Mockito.mock(TwoFactorAuthService.class);
+        // Real, não mockado — testa a integração de facto (ver
+        // LoginRateLimiterTest.java para o comportamento isolado do
+        // limitador), e cada teste começa com um limitador novo/limpo.
+        loginRateLimiter = new LoginRateLimiter();
         httpRequest = Mockito.mock(HttpServletRequest.class);
         when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
-        controller = new AuthController(userRepository, empresaRepository, jwtUtil, passwordEncoder, auditLogService, twoFactorAuthService);
+        controller = new AuthController(userRepository, empresaRepository, jwtUtil, passwordEncoder, auditLogService, twoFactorAuthService, loginRateLimiter);
 
         when(passwordEncoder.encode(any())).thenReturn("hash-fictício");
         when(jwtUtil.generateToken(any(), any())).thenReturn("token-fictício");
@@ -289,5 +296,77 @@ class AuthControllerTest {
         controller.login(loginDados(), httpRequest);
 
         verify(twoFactorAuthService, never()).verificarLoginComDoisFactores(any(), any());
+    }
+
+    // --- Rate limiting -----------------------------------------------------
+    // Auditoria de segurança: confirmado ao vivo que /auth/login aceitava
+    // tentativas ilimitadas de password e de código 2FA sem qualquer
+    // atraso — ver LoginRateLimiter.java.
+
+    @Test
+    void login_apos5PasswordsErradas_bloqueiaMesmoComPasswordCorretaDepois() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorComStatus("ATIVO")));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+        when(passwordEncoder.matches("errada", "hash-armazenado")).thenReturn(false);
+
+        LoginRequestDTO tentativaErrada = loginDados();
+        tentativaErrada.setPassword("errada");
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> controller.login(tentativaErrada, httpRequest)).isInstanceOf(RuntimeException.class);
+        }
+
+        assertThatThrownBy(() -> controller.login(loginDados(), httpRequest))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
+
+    @Test
+    void login_apos5CodigosDoisFatoresErrados_bloqueiaMesmoComCodigoCorretoDepois() {
+        LoginRequestDTO dados = loginDados();
+        dados.setCodigo2FA("000000");
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorCom2FA()));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+        when(twoFactorAuthService.verificarLoginComDoisFactores(any(), org.mockito.ArgumentMatchers.eq("000000")))
+                .thenReturn(false);
+        when(twoFactorAuthService.verificarLoginComDoisFactores(any(), org.mockito.ArgumentMatchers.eq("123456")))
+                .thenReturn(true);
+
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> controller.login(dados, httpRequest)).isInstanceOf(RuntimeException.class);
+        }
+
+        LoginRequestDTO comCodigoCorreto = loginDados();
+        comCodigoCorreto.setCodigo2FA("123456");
+        assertThatThrownBy(() -> controller.login(comCodigoCorreto, httpRequest))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
+
+    @Test
+    void login_comSucesso_limpaContadorDeTentativasFalhadas() {
+        when(userRepository.findByEmail("ana@empresa.ao")).thenReturn(Optional.of(utilizadorComStatus("ATIVO")));
+        when(passwordEncoder.matches("senhaCorreta123", "hash-armazenado")).thenReturn(true);
+        when(passwordEncoder.matches("errada", "hash-armazenado")).thenReturn(false);
+
+        LoginRequestDTO tentativaErrada = loginDados();
+        tentativaErrada.setPassword("errada");
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> controller.login(tentativaErrada, httpRequest)).isInstanceOf(RuntimeException.class);
+        }
+
+        // login com sucesso no meio — limpa o contador
+        controller.login(loginDados(), httpRequest);
+
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> controller.login(tentativaErrada, httpRequest)).isInstanceOf(RuntimeException.class);
+        }
+
+        // só 3 falhas desde o último sucesso — ainda não deve bloquear
+        ResponseEntity<LoginResponseDTO> resposta = controller.login(loginDados(), httpRequest);
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }
