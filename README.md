@@ -145,6 +145,19 @@ adivinha). Para ativar a camada de IA:
    `ANYTHINGLLM_WORKSPACE_EXEMPLOS` e `ANYTHINGLLM_WORKSPACE_NORMAS` no `.env`
    do FastAPI.
 
+### RAG — decisão de arquitetura
+
+O **AnythingLLM** (que gere por trás o Ollama, os embeddings e o vector
+store/LanceDB) é a arquitetura de RAG oficial adotada por este projeto —
+não é uma dependência acessória, é onde vive de facto a recuperação
+aumentada usada na classificação e na fundamentação legal.
+
+Existe também uma implementação manual de RAG (embeddings via Ollama
+`nomic-embed-text` + similaridade de cosseno sobre o Decreto 82/01),
+em `fastapi/app/legacy/`. Está **desativada de propósito** — mantida só
+para comparação/discussão na defesa da tese, não é o caminho que corre em
+produção (ver `fastapi/app/README_ANYTHINGLLM.md`).
+
 ## Testes
 
 ```bash
@@ -212,12 +225,16 @@ Cria um segundo serviço Railway com **Root Directory** = `fastapi`.
 | Variável | Obrigatória | Nota |
 |---|---|---|
 | `TESSERACT_CMD` | Não | Já vem instalado na imagem Docker (`tesseract-ocr` via `apt-get`) — não precisas de definir esta variável em produção, só em Windows local |
-| `GEMINI_API_KEY` | Não | Só necessária para a camada de IA — ver [Camada de IA](#camada-de-ia-opcional) |
-| `ANYTHINGLLM_BASE_URL` / `ANYTHINGLLM_API_KEY` / `ANYTHINGLLM_WORKSPACE_NORMAS` / `ANYTHINGLLM_WORKSPACE_EXEMPLOS` | Não | Idem. Se o AnythingLLM só correr localmente, `ANYTHINGLLM_BASE_URL` tem de ser um túnel público (ex.: ngrok) até ao Railway — este é o único uso de ngrok que continua válido neste projeto; **não é preciso** para expor o próprio backend/fastapi, que passam a estar hospedados diretamente no Railway |
+| `ANYTHINGLLM_BASE_URL` / `ANYTHINGLLM_API_KEY` / `ANYTHINGLLM_WORKSPACE_NORMAS` / `ANYTHINGLLM_WORKSPACE_EXEMPLOS` | Não | Necessárias para a camada de IA (ver [Camada de IA](#camada-de-ia-opcional)). Se o AnythingLLM só correr localmente, `ANYTHINGLLM_BASE_URL` tem de ser um túnel público (ex.: ngrok) até ao Railway — este é o único uso de ngrok que continua válido neste projeto; **não é preciso** para expor o próprio backend/fastapi, que passam a estar hospedados diretamente no Railway |
 
-Sem as variáveis `ANYTHINGLLM_*`/`GEMINI_API_KEY`, o serviço continua a
-funcionar — cai sempre no fallback por regras determinísticas (ver
+Sem as variáveis `ANYTHINGLLM_*`, o serviço continua a funcionar — cai
+sempre no fallback por regras determinísticas (ver
 [Camada de IA](#camada-de-ia-opcional)).
+
+Nota: uma variável `GEMINI_API_KEY` existe na configuração do FastAPI
+(`config/settings.py`) mas **não é usada por nenhum código** — é resíduo de
+uma versão anterior que chamava a API Gemini diretamente, hoje substituída
+pelo AnythingLLM. Não precisa de ser definida.
 
 ## Plano de contas
 
