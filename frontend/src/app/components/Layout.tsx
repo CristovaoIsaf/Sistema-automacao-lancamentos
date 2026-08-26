@@ -4,13 +4,11 @@ import {
   FileText,
   BookOpen,
   BarChart3,
-  Brain,
   Settings,
   Menu,
   X,
   Upload,
   Scale,
-  FileCode,
   Users,
   ChevronLeft,
   ChevronRight,
@@ -58,14 +56,6 @@ const menuSections: { label: string; items: MenuItem[] }[] = [
       { path: '/notas-contas', label: 'Notas às Contas', icon: FileSignature },
       // Consulta de logs de auditoria (UC010) — Administrador e Auditor
       { path: '/auditoria', label: 'Auditoria', icon: ScrollText },
-    ],
-  },
-  {
-    label: 'FISCAL',
-    items: [
-      { path: '/livros-fiscais', label: 'Livros Fiscais', icon: BookOpen },
-      { path: '/saft', label: 'Exportação SAF-T', icon: FileCode },
-      { path: '/ia-categorizacao', label: 'IA Categorização', icon: Brain, badge: 7 },
     ],
   },
   {

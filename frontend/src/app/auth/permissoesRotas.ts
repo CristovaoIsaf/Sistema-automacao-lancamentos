@@ -19,11 +19,8 @@ export const PERFIS_POR_ROTA: Record<string, Perfil[]> = {
   '/lancamento-diario': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/balancetes': TODOS,
   '/livro-razao': TODOS,
-  '/livros-fiscais': TODOS,
-  '/saft': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/relatorios': TODOS,
   '/notas-contas': TODOS,
-  '/ia-categorizacao': ['ADMINISTRADOR', 'CONTABILISTA'],
   '/plano-contas': ['ADMINISTRADOR'],
   // Fase 16 do plano de 20 fases ("auditor: utilizadores") — o backend já
   // permitia GET /api/utilizadores a AUDITOR (UserController), mas a rota

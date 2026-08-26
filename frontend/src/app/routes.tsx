@@ -5,16 +5,13 @@ import { Dashboard } from "./pages/Dashboard";
 import { Lancamentos } from "./pages/Lancamentos";
 import { LancamentoDiario } from "./pages/LancamentoDiario";
 import { PlanoContas } from "./pages/PlanoContas";
-import { LivrosFiscais } from "./pages/LivrosFiscais";
 import { Relatorios } from "./pages/Relatorios";
 import { NotasContas } from "./pages/NotasContas";
-import { IACategorizacao } from "./pages/IACategorizacao";
 import { Configuracoes } from "./pages/Configuracoes";
 import { UploadDocumentos } from "./pages/UploadDocumentos";
 import { Arquivo } from "./pages/Arquivo";
 import { Balancetes } from "./pages/Balancetes";
 import { LivroRazao } from "./pages/LivroRazao";
-import { ExportacaoSAFT } from "./pages/ExportacaoSAFT";
 import { Utilizadores } from "./pages/Utilizadores";
 import { Auditoria } from "./pages/Auditoria";
 import { ContaSeguranca } from "./pages/ContaSeguranca";
@@ -46,11 +43,8 @@ export const router = createBrowserRouter([
       { path: "balancetes", element: <RotaProtegida><Balancetes /></RotaProtegida> },
       { path: "livro-razao", element: <RotaProtegida><LivroRazao /></RotaProtegida> },
       { path: "plano-contas", element: <RotaProtegida><PlanoContas /></RotaProtegida> },
-      { path: "livros-fiscais", element: <RotaProtegida><LivrosFiscais /></RotaProtegida> },
-      { path: "saft", element: <RotaProtegida><ExportacaoSAFT /></RotaProtegida> },
       { path: "relatorios", element: <RotaProtegida><Relatorios /></RotaProtegida> },
       { path: "notas-contas", element: <RotaProtegida><NotasContas /></RotaProtegida> },
-      { path: "ia-categorizacao", element: <RotaProtegida><IACategorizacao /></RotaProtegida> },
       { path: "utilizadores", element: <RotaProtegida><Utilizadores /></RotaProtegida> },
       { path: "auditoria", element: <RotaProtegida><Auditoria /></RotaProtegida> },
       { path: "configuracoes", element: <RotaProtegida><Configuracoes /></RotaProtegida> },
