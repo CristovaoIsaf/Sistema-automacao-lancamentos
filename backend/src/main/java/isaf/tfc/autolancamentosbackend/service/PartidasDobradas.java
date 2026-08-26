@@ -2,6 +2,7 @@ package isaf.tfc.autolancamentosbackend.service;
 
 import isaf.tfc.autolancamentosbackend.dto.ContaDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
+import isaf.tfc.autolancamentosbackend.dto.LinhaSugeridaDTO;
 import isaf.tfc.autolancamentosbackend.model.LinhaLancamento;
 
 import java.math.BigDecimal;
@@ -28,6 +29,55 @@ import java.util.stream.Collectors;
 public final class PartidasDobradas {
 
     private PartidasDobradas() {
+    }
+
+    // Extensão do projeto às contas do PGC-AO (34.5.1 = IVA dedutível,
+    // 34.5.2 = IVA liquidado) — ver fastapi/app/services/pgc.py. O FastAPI
+    // já devolve linhas nestas contas nas partidas dobradas sugeridas;
+    // antes desta modelação o Java nunca reconhecia essas linhas como IVA
+    // especificamente, o valor ficava só "enterrado" numa conta qualquer
+    // dentro de linhasJson/LinhaLancamento.
+    public static final String PREFIXO_CONTA_IVA = "34.5";
+
+    /**
+     * Soma o valor das linhas de IVA (conta a começar por PREFIXO_CONTA_IVA)
+     * de um lançamento já construído — usa o lado preenchido (débito OU
+     * crédito) de cada linha, nunca os dois. Devolve ZERO quando não há
+     * nenhuma linha de IVA, nunca null, para o campo persistido nunca
+     * precisar de tratar "sem IVA" como um caso especial separado de "0".
+     */
+    public static BigDecimal calcularValorIva(List<LinhaLancamento> linhas) {
+        return linhas.stream()
+                .filter(PartidasDobradas::ehLinhaIva)
+                .map(linha -> valorPreenchido(linha.getDebito(), linha.getCredito()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static boolean ehLinhaIva(LinhaLancamento linha) {
+        return linha.getConta() != null && linha.getConta().startsWith(PREFIXO_CONTA_IVA);
+    }
+
+    /**
+     * Mesmo cálculo que calcularValorIva(List&lt;LinhaLancamento&gt;), mas
+     * sobre as linhas ainda em formato texto tal como a API de análise as
+     * devolve (LinhaSugeridaDTO) — usado ao criar a Sugestao, antes de
+     * qualquer linha virar LinhaLancamento persistível.
+     */
+    public static BigDecimal calcularValorIvaSugerido(List<LinhaSugeridaDTO> linhas) {
+        if (linhas == null) {
+            return BigDecimal.ZERO;
+        }
+        return linhas.stream()
+                .filter(linha -> linha.getConta() != null && linha.getConta().startsWith(PREFIXO_CONTA_IVA))
+                .map(linha -> valorPreenchido(parseValorNullable(linha.getDebito()), parseValorNullable(linha.getCredito())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static BigDecimal valorPreenchido(BigDecimal debito, BigDecimal credito) {
+        if (debito != null) {
+            return debito;
+        }
+        return credito != null ? credito : BigDecimal.ZERO;
     }
 
     /**

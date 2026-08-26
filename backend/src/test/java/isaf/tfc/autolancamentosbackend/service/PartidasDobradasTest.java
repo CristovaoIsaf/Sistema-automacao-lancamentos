@@ -1,5 +1,6 @@
 package isaf.tfc.autolancamentosbackend.service;
 
+import isaf.tfc.autolancamentosbackend.dto.LinhaSugeridaDTO;
 import isaf.tfc.autolancamentosbackend.model.LinhaLancamento;
 import org.junit.jupiter.api.Test;
 
@@ -103,5 +104,75 @@ class PartidasDobradasTest {
         linha.setDebito(debito);
         linha.setCredito(credito);
         return linha;
+    }
+
+    // --- calcularValorIva --------------------------------------------------
+    // Modelação de IVA no domínio Java: antes desta correção, o valor de
+    // IVA de um lançamento só existia "enterrado" numa linha qualquer, sem
+    // nenhum campo próprio nem forma de o somar sem reanalisar linhasJson.
+
+    @Test
+    void calcularValorIva_semNenhumaLinhaDeIva_devolveZero() {
+        List<LinhaLancamento> linhas = List.of(
+                linha("31", new BigDecimal("50000.00"), null),
+                linha("61", null, new BigDecimal("50000.00"))
+        );
+
+        assertThat(PartidasDobradas.calcularValorIva(linhas)).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    void calcularValorIva_comUmaLinhaDeIvaACredito_somaEssaLinha() {
+        List<LinhaLancamento> linhas = List.of(
+                linha("31", new BigDecimal("50000.00"), null),
+                linha("61", null, new BigDecimal("43859.65")),
+                linha("34.5.2", null, new BigDecimal("6140.35"))
+        );
+
+        assertThat(PartidasDobradas.calcularValorIva(linhas)).isEqualByComparingTo("6140.35");
+    }
+
+    @Test
+    void calcularValorIva_comDuasLinhasDeIva_somaAsDuas() {
+        List<LinhaLancamento> linhas = List.of(
+                linha("34.5.1", new BigDecimal("1000.00"), null),
+                linha("34.5.2", null, new BigDecimal("1400.00"))
+        );
+
+        assertThat(PartidasDobradas.calcularValorIva(linhas)).isEqualByComparingTo("2400.00");
+    }
+
+    @Test
+    void calcularValorIva_contaComPrefixoParecidoMasDiferente_naoConta() {
+        // "34.6" não é IVA (só 34.5.x é) — não pode entrar na soma por
+        // coincidência de prefixo textual.
+        List<LinhaLancamento> linhas = List.of(linha("34.6", new BigDecimal("999.00"), null));
+
+        assertThat(PartidasDobradas.calcularValorIva(linhas)).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    // --- calcularValorIvaSugerido -------------------------------------------
+
+    @Test
+    void calcularValorIvaSugerido_linhasNulas_devolveZero() {
+        assertThat(PartidasDobradas.calcularValorIvaSugerido(null)).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    void calcularValorIvaSugerido_formatoTextoComoAApiDevolve_convertaESoma() {
+        LinhaSugeridaDTO base = linhaSugerida("31", "50000.00", null);
+        LinhaSugeridaDTO custo = linhaSugerida("61", null, "43859.65");
+        LinhaSugeridaDTO iva = linhaSugerida("34.5.2", null, "6140.35");
+
+        assertThat(PartidasDobradas.calcularValorIvaSugerido(List.of(base, custo, iva)))
+                .isEqualByComparingTo("6140.35");
+    }
+
+    private LinhaSugeridaDTO linhaSugerida(String conta, String debito, String credito) {
+        LinhaSugeridaDTO dto = new LinhaSugeridaDTO();
+        dto.setConta(conta);
+        dto.setDebito(debito);
+        dto.setCredito(credito);
+        return dto;
     }
 }

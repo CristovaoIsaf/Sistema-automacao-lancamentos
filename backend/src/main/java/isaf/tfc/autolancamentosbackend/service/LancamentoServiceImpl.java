@@ -92,6 +92,7 @@ public class LancamentoServiceImpl implements LancamentoService {
             lancamento.getLinhas().add(linha);
         });
 
+        lancamento.setValorIva(PartidasDobradas.calcularValorIva(lancamento.getLinhas()));
 
         // 3. Guardar
         Lancamento salvo =
@@ -217,6 +218,7 @@ public class LancamentoServiceImpl implements LancamentoService {
                 linha.setLancamento(lancamento);
                 lancamento.getLinhas().add(linha);
             });
+            lancamento.setValorIva(PartidasDobradas.calcularValorIva(lancamento.getLinhas()));
 
             // Mesma semântica já usada em aprovarSugestao — só faz sentido
             // para origem AUTOMATICO (ver comentário em Lancamento.editadoManualmente).
@@ -330,6 +332,7 @@ public class LancamentoServiceImpl implements LancamentoService {
             linhaInvertida.setLancamento(estorno);
             estorno.getLinhas().add(linhaInvertida);
         });
+        estorno.setValorIva(PartidasDobradas.calcularValorIva(estorno.getLinhas()));
 
         return estorno;
     }

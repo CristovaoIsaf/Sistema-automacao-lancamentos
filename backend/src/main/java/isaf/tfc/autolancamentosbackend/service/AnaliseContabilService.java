@@ -96,6 +96,7 @@ public class AnaliseContabilService {
         sugestao.setTipoDocumento(tipoDocumento);
         sugestao.setCategoriaContabil(extrairCategoriaContabil(analise.getLinhas()));
         sugestao.setValor(valorOuDefeito(analise.getValorTotal(), "0"));
+        sugestao.setValorIva(PartidasDobradas.calcularValorIvaSugerido(analise.getLinhas()));
         sugestao.setEntidade(analise.getEntidade());
         sugestao.setNif(analise.getNif());
         sugestao.setNumeroDocumento(analise.getNumeroDocumento());
@@ -166,6 +167,7 @@ public class AnaliseContabilService {
             lancamento.getLinhas().addAll(linhas);
             PartidasDobradas.validarEquilibrio(lancamento.getLinhas());
             PartidasDobradas.validarContasExistem(lancamento.getLinhas(), planoContasClient.listar());
+            lancamento.setValorIva(PartidasDobradas.calcularValorIva(lancamento.getLinhas()));
             lancamento.setEditadoManualmente(request.isEditado());
         } else {
             List<LinhaSugeridaDTO> linhasSugeridas = desserializarLinhas(sugestao.getLinhasJson());
@@ -179,6 +181,7 @@ public class AnaliseContabilService {
                 linha.setLancamento(lancamento);
                 lancamento.getLinhas().add(linha);
                 PartidasDobradas.validarContasExistem(lancamento.getLinhas(), planoContasClient.listar());
+                lancamento.setValorIva(PartidasDobradas.calcularValorIva(lancamento.getLinhas()));
             } else {
                 for (LinhaSugeridaDTO linhaSugerida : linhasSugeridas) {
                     LinhaLancamento linha = new LinhaLancamento();
@@ -191,6 +194,7 @@ public class AnaliseContabilService {
                 }
                 PartidasDobradas.validarEquilibrio(lancamento.getLinhas());
                 PartidasDobradas.validarContasExistem(lancamento.getLinhas(), planoContasClient.listar());
+                lancamento.setValorIva(PartidasDobradas.calcularValorIva(lancamento.getLinhas()));
             }
         }
 

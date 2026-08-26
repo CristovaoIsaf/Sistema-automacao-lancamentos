@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -38,6 +39,10 @@ public class LancamentoResponseDTO {
     private Boolean editadoManualmente;
 
     private List<LinhaLancamentoDTO> linhas;
+
+    // Modelação de IVA no domínio Java — ver Lancamento.valorIva /
+    // PartidasDobradas.calcularValorIva.
+    private BigDecimal valorIva;
 
     private Long documentoId;
 

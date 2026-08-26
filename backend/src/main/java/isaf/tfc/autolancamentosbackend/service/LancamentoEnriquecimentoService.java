@@ -123,6 +123,7 @@ public class LancamentoEnriquecimentoService {
                         linha.getDescricao()))
                 .toList();
         dto.setLinhas(linhas);
+        dto.setValorIva(lancamento.getValorIva());
 
         Sugestao sugestao = lancamento.getSugestaoId() != null ? sugestoesPorId.get(lancamento.getSugestaoId()) : null;
         DocumentoContabilistico documento = sugestao != null && sugestao.getDocumentoId() != null

@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -30,6 +31,14 @@ public class Lancamento {
     private LocalDate data;
 
     private String descricao;
+
+    // Modelação de IVA no domínio Java — soma das linhas cuja conta é de
+    // IVA (34.5.1/34.5.2, ver PartidasDobradas.calcularValorIva). Calculado
+    // sempre que as linhas do lançamento são definidas/substituídas (manual,
+    // aprovação de sugestão, edição, estorno) — nunca lido diretamente do
+    // FastAPI. ZERO quando não há linha de IVA, nunca null.
+    @Column(name = "valor_iva")
+    private BigDecimal valorIva;
 
     // columnDefinition explícito (Auditoria C01/C03 — descoberto num teste
     // HTTP ao vivo antes desta correção): sem isto, o Hibernate 7 gera por

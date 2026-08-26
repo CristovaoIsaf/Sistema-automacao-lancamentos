@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -38,6 +39,14 @@ public class Sugestao {
 
     // Valor devolvido pelo Gemini em formato texto (ex: "150.000,00 Kz")
     private String valor;
+
+    // Modelação de IVA no domínio Java (antes só existia enterrado dentro
+    // de linhasJson, nunca era um campo próprio queryable) — soma das
+    // linhas sugeridas cuja conta é de IVA (34.5.1/34.5.2, ver
+    // PartidasDobradas.PREFIXO_CONTA_IVA). ZERO quando o documento não tem
+    // nenhuma linha de IVA, nunca null.
+    @Column(name = "valor_iva")
+    private BigDecimal valorIva;
 
     // Nome/NIF da entidade (fornecedor numa compra, cliente numa venda) —
     // já vem tratado por regex do FastAPI (regex_extract.py), nunca
