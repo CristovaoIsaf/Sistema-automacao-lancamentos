@@ -4,6 +4,7 @@ import isaf.tfc.autolancamentosbackend.dto.LancamentoHistoricoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
+import isaf.tfc.autolancamentosbackend.dto.PaginaLancamentosDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 import isaf.tfc.autolancamentosbackend.model.Lancamento;
 import isaf.tfc.autolancamentosbackend.model.LancamentoHistorico;
@@ -15,6 +16,9 @@ import isaf.tfc.autolancamentosbackend.repository.LancamentoRepository;
 import isaf.tfc.autolancamentosbackend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -139,9 +143,16 @@ public class LancamentoServiceImpl implements LancamentoService {
 
 
     @Override
-    public List<LancamentoResponseDTO> listarTodos() {
+    public PaginaLancamentosDTO listarPaginado(int pagina, int tamanho) {
+        int paginaValida = Math.max(pagina, 0);
+        int tamanhoValido = tamanho > 0 ? tamanho : 20;
 
-        return enriquecimentoService.converterTodos(repository.findAll());
+        Page<Lancamento> resultado = repository.findAll(
+                PageRequest.of(paginaValida, tamanhoValido, Sort.by(Sort.Direction.DESC, "data")));
+
+        return new PaginaLancamentosDTO(
+                enriquecimentoService.converterTodos(resultado.getContent()),
+                resultado.getTotalElements());
     }
 
 

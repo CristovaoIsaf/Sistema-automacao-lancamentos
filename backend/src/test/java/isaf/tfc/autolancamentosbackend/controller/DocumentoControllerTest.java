@@ -15,6 +15,9 @@ import isaf.tfc.autolancamentosbackend.service.DocumentoEnriquecimentoService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -22,7 +25,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
@@ -62,11 +65,11 @@ class DocumentoControllerTest {
     @Test
     void listar_documentoSemSugestao_ficaPendente() {
         DocumentoContabilistico documento = documentoComId(10L, null);
-        when(documentoRepository.findAll()).thenReturn(List.of(documento));
+        mockarPagina(documento);
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
-        when(sugestaoRepository.findAllByDocumentoId(10L)).thenReturn(List.of());
+        when(sugestaoRepository.findByDocumentoIdIn(any())).thenReturn(List.of());
 
-        List<DocumentoResponseDTO> resposta = controller.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = controller.listar(utilizador, null, null).getBody().getItens();
 
         assertThat(resposta).hasSize(1);
         assertThat(resposta.get(0).getEstado()).isEqualTo("Pendente");
@@ -76,12 +79,12 @@ class DocumentoControllerTest {
     @Test
     void listar_sugestaoPendente_ficaAnalisado() {
         DocumentoContabilistico documento = documentoComId(11L, null);
-        when(documentoRepository.findAll()).thenReturn(List.of(documento));
+        mockarPagina(documento);
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
-        when(sugestaoRepository.findAllByDocumentoId(11L))
-                .thenReturn(List.of(sugestaoComEstado(EstadoSugestao.PENDENTE, LocalDateTime.now())));
+        when(sugestaoRepository.findByDocumentoIdIn(any()))
+                .thenReturn(List.of(sugestaoComEstado(11L, EstadoSugestao.PENDENTE, LocalDateTime.now())));
 
-        List<DocumentoResponseDTO> resposta = controller.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = controller.listar(utilizador, null, null).getBody().getItens();
 
         assertThat(resposta.get(0).getEstado()).isEqualTo("Analisado");
     }
@@ -90,12 +93,12 @@ class DocumentoControllerTest {
     void listar_sugestaoAprovada_ficaAprovadoEComNomeDaEntidade() {
         Entidade entidade = new Entidade(5L, "Sonangol Distribuidora Lda", "5417002619", TipoEntidade.FORNECEDOR);
         DocumentoContabilistico documento = documentoComId(12L, 5L);
-        when(documentoRepository.findAll()).thenReturn(List.of(documento));
+        mockarPagina(documento);
         when(entidadeRepository.findAllById(List.of(5L))).thenReturn(List.of(entidade));
-        when(sugestaoRepository.findAllByDocumentoId(12L))
-                .thenReturn(List.of(sugestaoComEstado(EstadoSugestao.APROVADA, LocalDateTime.now())));
+        when(sugestaoRepository.findByDocumentoIdIn(any()))
+                .thenReturn(List.of(sugestaoComEstado(12L, EstadoSugestao.APROVADA, LocalDateTime.now())));
 
-        List<DocumentoResponseDTO> resposta = controller.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = controller.listar(utilizador, null, null).getBody().getItens();
 
         assertThat(resposta.get(0).getEstado()).isEqualTo("Aprovado");
         assertThat(resposta.get(0).getEntidadeNome()).isEqualTo("Sonangol Distribuidora Lda");
@@ -104,12 +107,12 @@ class DocumentoControllerTest {
     @Test
     void listar_sugestaoRejeitada_ficaRejeitado() {
         DocumentoContabilistico documento = documentoComId(13L, null);
-        when(documentoRepository.findAll()).thenReturn(List.of(documento));
+        mockarPagina(documento);
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
-        when(sugestaoRepository.findAllByDocumentoId(13L))
-                .thenReturn(List.of(sugestaoComEstado(EstadoSugestao.REJEITADA, LocalDateTime.now())));
+        when(sugestaoRepository.findByDocumentoIdIn(any()))
+                .thenReturn(List.of(sugestaoComEstado(13L, EstadoSugestao.REJEITADA, LocalDateTime.now())));
 
-        List<DocumentoResponseDTO> resposta = controller.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = controller.listar(utilizador, null, null).getBody().getItens();
 
         assertThat(resposta.get(0).getEstado()).isEqualTo("Rejeitado");
     }
@@ -117,15 +120,15 @@ class DocumentoControllerTest {
     @Test
     void listar_variasSugestoes_usaAEstadoDaMaisRecente() {
         DocumentoContabilistico documento = documentoComId(14L, null);
-        when(documentoRepository.findAll()).thenReturn(List.of(documento));
+        mockarPagina(documento);
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
         // Reanálise: a primeira sugestão foi rejeitada, a mais recente já foi aprovada.
-        when(sugestaoRepository.findAllByDocumentoId(14L)).thenReturn(List.of(
-                sugestaoComEstado(EstadoSugestao.REJEITADA, LocalDateTime.now().minusDays(1)),
-                sugestaoComEstado(EstadoSugestao.APROVADA, LocalDateTime.now())
+        when(sugestaoRepository.findByDocumentoIdIn(any())).thenReturn(List.of(
+                sugestaoComEstado(14L, EstadoSugestao.REJEITADA, LocalDateTime.now().minusDays(1)),
+                sugestaoComEstado(14L, EstadoSugestao.APROVADA, LocalDateTime.now())
         ));
 
-        List<DocumentoResponseDTO> resposta = controller.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = controller.listar(utilizador, null, null).getBody().getItens();
 
         assertThat(resposta.get(0).getEstado()).isEqualTo("Aprovado");
     }
@@ -134,13 +137,18 @@ class DocumentoControllerTest {
     void listar_calculaTamanhoAPartirDosBytesDoConteudo() {
         DocumentoContabilistico documento = documentoComId(15L, null);
         documento.setConteudo(new byte[]{1, 2, 3, 4, 5});
-        when(documentoRepository.findAll()).thenReturn(List.of(documento));
+        mockarPagina(documento);
         when(entidadeRepository.findAllById(List.of())).thenReturn(List.of());
-        when(sugestaoRepository.findAllByDocumentoId(anyLong())).thenReturn(List.of());
+        when(sugestaoRepository.findByDocumentoIdIn(any())).thenReturn(List.of());
 
-        List<DocumentoResponseDTO> resposta = controller.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = controller.listar(utilizador, null, null).getBody().getItens();
 
         assertThat(resposta.get(0).getTamanho()).isEqualTo(5);
+    }
+
+    private void mockarPagina(DocumentoContabilistico documento) {
+        Page<DocumentoContabilistico> pagina = new PageImpl<>(List.of(documento));
+        when(documentoRepository.findAll(any(Pageable.class))).thenReturn(pagina);
     }
 
     @Test
@@ -269,8 +277,9 @@ class DocumentoControllerTest {
         return documento;
     }
 
-    private Sugestao sugestaoComEstado(EstadoSugestao estado, LocalDateTime dataCriacao) {
+    private Sugestao sugestaoComEstado(Long documentoId, EstadoSugestao estado, LocalDateTime dataCriacao) {
         Sugestao sugestao = new Sugestao();
+        sugestao.setDocumentoId(documentoId);
         sugestao.setEstado(estado);
         sugestao.setDataCriacao(dataCriacao);
         return sugestao;

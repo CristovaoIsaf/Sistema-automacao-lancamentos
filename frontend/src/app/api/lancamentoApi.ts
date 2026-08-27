@@ -19,11 +19,18 @@ export async function criarLancamento(
 }
 
 
+// Auditoria de performance: GET /api/lancamentos passou a ser paginado no
+// backend (antes devolvia sempre o histórico inteiro, sem limite). Mesma
+// escolha que listarDocumentos (documentoApi.ts): pede uma única página
+// generosa, para Lancamentos.tsx continuar a filtrar/contar em memória
+// sobre a lista completa sem precisar de "carregar mais" — só deixa de
+// ser um "SELECT * sem limite" do lado do servidor.
 export async function listarLancamentos(): Promise<LancamentoResponse[]> {
 
-    return apiGet<LancamentoResponse[]>(
-        "/api/lancamentos"
+    const pagina = await apiGet<{ itens: LancamentoResponse[]; total: number }>(
+        "/api/lancamentos?limite=500"
     );
+    return pagina.itens;
 
 }
 

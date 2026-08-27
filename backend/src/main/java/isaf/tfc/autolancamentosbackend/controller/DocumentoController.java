@@ -2,6 +2,7 @@ package isaf.tfc.autolancamentosbackend.controller;
 
 import isaf.tfc.autolancamentosbackend.dto.CorrigirClassificacaoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.DocumentoResponseDTO;
+import isaf.tfc.autolancamentosbackend.dto.PaginaDocumentosDTO;
 import isaf.tfc.autolancamentosbackend.dto.RenomearDocumentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.model.DocumentoContabilistico;
 import isaf.tfc.autolancamentosbackend.model.Entidade;
@@ -26,6 +27,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -176,11 +180,28 @@ public class DocumentoController {
      * fase: "a identidade documental não depende do contabilista;
      * contabilista = autoria/auditoria" — o documento pertence à empresa
      * (este projecto é single-tenant), não a quem o carregou.
+     *
+     * Paginado (auditoria de performance — antes devolvia sempre o arquivo
+     * inteiro, findAll() sem Pageable). `page` é 0-based, `limite` é o
+     * tamanho da página (omitidos = página 0, 20 itens). Mais recente
+     * primeiro.
      */
     @GetMapping
     @Transactional(readOnly = true)
-    public ResponseEntity<List<DocumentoResponseDTO>> listar(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(enriquecimentoService.converterTodos(documentoRepository.findAll()));
+    public ResponseEntity<PaginaDocumentosDTO> listar(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer limite
+    ) {
+        int paginaAtual = (page != null && page > 0) ? page : 0;
+        int tamanhoPagina = (limite != null && limite > 0) ? limite : 20;
+
+        Page<DocumentoContabilistico> resultado = documentoRepository.findAll(
+                PageRequest.of(paginaAtual, tamanhoPagina, Sort.by(Sort.Direction.DESC, "dataUpload")));
+
+        return ResponseEntity.ok(new PaginaDocumentosDTO(
+                enriquecimentoService.converterTodos(resultado.getContent()),
+                resultado.getTotalElements()));
     }
 
     @GetMapping("/{id}")

@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import lombok.Data;
@@ -12,7 +13,10 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "documentos")
+// Auditoria de performance: EntidadeController.dossie() e
+// DocumentoEnriquecimentoService filtram/agrupam por entidade_id sem
+// nenhum índice — table scan completo a cada dossiê de entidade consultado.
+@Table(name = "documentos", indexes = @Index(name = "idx_documentos_entidade_id", columnList = "entidadeId"))
 @Data
 public class DocumentoContabilistico {
 

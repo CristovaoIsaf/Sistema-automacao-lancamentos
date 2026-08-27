@@ -13,7 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "lancamento")
+// Auditoria de performance: GET /api/lancamentos e todos os relatórios
+// (Balancete/DRE/Balanço/Fluxo de Caixa/Livro Razão) filtram por
+// findByDataBetween sem nenhum índice em "data" — table scan completo em
+// cada pedido à medida que o histórico cresce.
+@Table(name = "lancamento", indexes = @Index(name = "idx_lancamento_data", columnList = "data"))
 @Getter
 @Setter
 @AllArgsConstructor

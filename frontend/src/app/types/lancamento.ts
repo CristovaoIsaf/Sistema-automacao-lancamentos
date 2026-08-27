@@ -36,6 +36,10 @@ export interface LancamentoResponse {
 
     linhas: LinhaLancamento[];
 
+    // Modelação de IVA no domínio Java — soma das linhas de IVA
+    // (34.5.1/34.5.2), sempre presente (0 quando não há linha de IVA).
+    valorIva?: number;
+
     // Fase 9 do plano de 20 fases — histórico filtrável por documento/
     // entidade/utilizador (ver LancamentoEnriquecimentoService no backend).
     // null para lançamentos MANUAL (sem documento/entidade de origem).

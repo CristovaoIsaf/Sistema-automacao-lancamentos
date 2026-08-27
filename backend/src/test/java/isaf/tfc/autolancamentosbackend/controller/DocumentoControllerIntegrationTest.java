@@ -77,7 +77,7 @@ class DocumentoControllerIntegrationTest {
         utilizador.setId(999L);
 
         Long documentoId = documento.getId();
-        List<DocumentoResponseDTO> resposta = documentoController.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = documentoController.listar(utilizador, null, null).getBody().getItens();
 
         DocumentoResponseDTO dto = resposta.stream()
                 .filter(d -> d.getId().equals(documentoId))
@@ -111,7 +111,7 @@ class DocumentoControllerIntegrationTest {
         // não se pode assumir que este é o único da lista (a BD de
         // desenvolvimento usada nestes testes tem documentos de sessões
         // anteriores) — filtra pelo id, tal como o teste acima já fazia.
-        List<DocumentoResponseDTO> resposta = documentoController.listar(utilizador).getBody();
+        List<DocumentoResponseDTO> resposta = documentoController.listar(utilizador, null, null).getBody().getItens();
 
         DocumentoResponseDTO dto = resposta.stream()
                 .filter(d -> d.getId().equals(documentoId))

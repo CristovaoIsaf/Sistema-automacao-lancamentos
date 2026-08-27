@@ -8,7 +8,6 @@ import isaf.tfc.autolancamentosbackend.repository.EntidadeRepository;
 import isaf.tfc.autolancamentosbackend.repository.SugestaoRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,14 +46,27 @@ public class DocumentoEnriquecimentoService {
                         .toList()
         ).stream().collect(Collectors.toMap(Entidade::getId, e -> e));
 
+        // Auditoria de performance: antes, cada documento disparava a sua
+        // própria query (findAllByDocumentoId) para achar a sugestão mais
+        // recente — N+1 confirmado em GET /documentos e no dossiê de
+        // entidade. Uma única query em lote (findByDocumentoIdIn), depois
+        // agrupada e reduzida à mais recente por documento em memória.
+        List<Long> documentoIds = documentos.stream().map(DocumentoContabilistico::getId).toList();
+        Map<Long, Sugestao> sugestaoMaisRecentePorDocumentoId = sugestaoRepository.findByDocumentoIdIn(documentoIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        Sugestao::getDocumentoId,
+                        s -> s,
+                        (existente, candidata) -> candidata.getDataCriacao().isAfter(existente.getDataCriacao()) ? candidata : existente
+                ));
+
         return documentos.stream()
-                .map(doc -> construir(doc, entidadesPorId))
+                .map(doc -> construir(doc, entidadesPorId, sugestaoMaisRecentePorDocumentoId.get(doc.getId())))
                 .toList();
     }
 
-    private DocumentoResponseDTO construir(DocumentoContabilistico doc, Map<Long, Entidade> entidadesPorId) {
+    private DocumentoResponseDTO construir(DocumentoContabilistico doc, Map<Long, Entidade> entidadesPorId, Sugestao maisRecente) {
         Entidade entidade = doc.getEntidadeId() != null ? entidadesPorId.get(doc.getEntidadeId()) : null;
-        Sugestao maisRecente = sugestaoMaisRecente(doc.getId());
 
         return new DocumentoResponseDTO(
                 doc.getId(),
@@ -75,12 +87,6 @@ public class DocumentoEnriquecimentoService {
                 maisRecente != null ? maisRecente.getValorOriginalIA() : null,
                 maisRecente != null ? maisRecente.getCorrigidoEm() : null
         );
-    }
-
-    private Sugestao sugestaoMaisRecente(Long documentoId) {
-        return sugestaoRepository.findAllByDocumentoId(documentoId).stream()
-                .max(Comparator.comparing(Sugestao::getDataCriacao))
-                .orElse(null);
     }
 
     private String estadoDaSugestao(Sugestao maisRecente) {

@@ -3,6 +3,7 @@ package isaf.tfc.autolancamentosbackend.service;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoHistoricoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
+import isaf.tfc.autolancamentosbackend.dto.PaginaLancamentosDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 
 import java.time.LocalDate;
@@ -39,9 +40,13 @@ public interface LancamentoService {
 
 
     /**
-     * Lista todos os lançamentos.
+     * Auditoria de performance: antes devolvia sempre a lista completa
+     * (findAll() sem Pageable) — sem limite de crescimento com o
+     * histórico. `pagina` é 0-based, `tamanho` é o número de itens por
+     * página (mesma convenção já usada em AuditoriaService.listarLogs).
+     * Mais recente primeiro.
      */
-    List<LancamentoResponseDTO> listarTodos();
+    PaginaLancamentosDTO listarPaginado(int pagina, int tamanho);
 
 
     /**

@@ -15,6 +15,12 @@ public interface SugestaoRepository extends JpaRepository<Sugestao, Long> {
     // tentativa, reanálise) — por isso é uma lista, não um resultado único.
     List<Sugestao> findAllByDocumentoId(Long documentoId);
 
+    // Auditoria de performance — versão em lote de findAllByDocumentoId,
+    // usada por DocumentoEnriquecimentoService.converterTodos para evitar
+    // uma query por documento (N+1 confirmado: antes, listar N documentos
+    // disparava N chamadas a findAllByDocumentoId, uma por documento).
+    List<Sugestao> findByDocumentoIdIn(List<Long> documentoIds);
+
     // Mesma noção de "sugestão mais recente" que
     // DocumentoEnriquecimentoService.sugestaoMaisRecente() usa para a
     // listagem — reutilizada por PATCH /documentos/{id}/classificacao para

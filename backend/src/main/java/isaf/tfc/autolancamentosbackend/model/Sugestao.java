@@ -10,7 +10,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "sugestao")
+// Auditoria de performance: findAllByDocumentoId/
+// findTopByDocumentoIdOrderByDataCriacaoDesc (SugestaoRepository) e o
+// enriquecimento de documentos (DocumentoEnriquecimentoService) filtram por
+// documento_id sem nenhum índice.
+@Table(name = "sugestao", indexes = @Index(name = "idx_sugestao_documento_id", columnList = "documento_id"))
 @Getter
 @Setter
 @AllArgsConstructor

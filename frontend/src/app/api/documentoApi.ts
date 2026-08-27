@@ -4,8 +4,16 @@ import type { Documento, UploadDocumentoResponse } from '../types/documento';
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
+// Auditoria de performance: GET /documentos passou a ser paginado no
+// backend (antes devolvia sempre o arquivo inteiro, sem limite). Pede uma
+// única página generosa em vez de implementar aqui um "carregar mais" —
+// Arquivo.tsx faz pesquisa/agrupamento por entidade em memória sobre a
+// lista completa, por isso mantém-se o mesmo contrato (array simples) que
+// os consumidores já esperam; só deixa de ser um "SELECT * sem limite" do
+// lado do servidor.
 export async function listarDocumentos(): Promise<Documento[]> {
-  return apiGet<Documento[]>('/documentos');
+  const pagina = await apiGet<{ itens: Documento[]; total: number }>('/documentos?limite=500');
+  return pagina.itens;
 }
 
 export async function uploadDocumento(file: File): Promise<UploadDocumentoResponse> {

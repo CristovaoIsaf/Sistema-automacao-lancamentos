@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -25,7 +26,9 @@ import java.time.LocalDateTime;
  * depois de gravado (é histórico).
  */
 @Entity
-@Table(name = "lancamento_historico")
+// Auditoria de performance: findByLancamentoIdOrderByAlteradoEmDesc filtra
+// por lancamento_id sem nenhum índice.
+@Table(name = "lancamento_historico", indexes = @Index(name = "idx_lancamento_historico_lancamento_id", columnList = "lancamento_id"))
 @Getter
 @Setter
 @AllArgsConstructor

@@ -4,6 +4,7 @@ import isaf.tfc.autolancamentosbackend.dto.LancamentoHistoricoDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.dto.LancamentoResponseDTO;
 import isaf.tfc.autolancamentosbackend.dto.LinhaLancamentoDTO;
+import isaf.tfc.autolancamentosbackend.dto.PaginaLancamentosDTO;
 import isaf.tfc.autolancamentosbackend.dto.SolicitarCancelamentoRequestDTO;
 import isaf.tfc.autolancamentosbackend.model.EstadoLancamento;
 import isaf.tfc.autolancamentosbackend.model.User;
@@ -65,11 +66,19 @@ public class LancamentoController {
 
 
     /**
-     * Lista todos os lançamentos (usado pela página de histórico no frontend).
+     * Lista os lançamentos (usado pela página de histórico no frontend),
+     * paginado (auditoria de performance — antes devolvia sempre a lista
+     * completa). `page` é 0-based, `limite` é o tamanho da página (omitidos
+     * = página 0, 20 itens).
      */
     @GetMapping
-    public ResponseEntity<List<LancamentoResponseDTO>> listar() {
-        return ResponseEntity.ok(service.listarTodos());
+    public ResponseEntity<PaginaLancamentosDTO> listar(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer limite
+    ) {
+        int paginaAtual = (page != null && page > 0) ? page : 0;
+        int tamanhoPagina = (limite != null && limite > 0) ? limite : 20;
+        return ResponseEntity.ok(service.listarPaginado(paginaAtual, tamanhoPagina));
     }
 
 
