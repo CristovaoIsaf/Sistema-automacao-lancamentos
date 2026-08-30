@@ -66,12 +66,24 @@ export interface Sugestao {
   categoriaContabil: string;
   categoria?: string | null;
   valor: string;
+  // Modelação de IVA no domínio Java — soma das linhas de IVA
+  // (34.5.1/34.5.2), sempre presente (0 quando não há linha de IVA).
+  valorIva?: number | null;
   // Série+número da fatura (ex. "FT 2026/001") — ver Sugestao.numeroDocumento
   // no backend. Corrigível via PATCH /documentos/{id}/classificacao.
   numeroDocumento?: string | null;
   entidade?: string | null;
   nif?: string | null;
   descricao: string;
+  // Auditoria C05 — snapshot do valor ORIGINAL da IA, preenchido só na
+  // primeira correção humana (PATCH /documentos/{id}/classificacao).
+  // Presença não-nula é o sinal de "este campo foi corrigido por um
+  // humano" (ver componente CampoExtraido em UploadDocumentos.tsx).
+  tipoDocumentoOriginalIA?: string | null;
+  numeroDocumentoOriginalIA?: string | null;
+  valorOriginalIA?: string | null;
+  corrigidoPor?: number | null;
+  corrigidoEm?: string | null;
   // Lista de LinhaSugeridaDTO (conta/nome/debito/credito) serializada em
   // JSON — usar JSON.parse antes de mostrar/editar como linhas de
   // lançamento (ver LancamentoDiario.tsx).
