@@ -13,7 +13,12 @@ export const TODOS: Perfil[] = ['ADMINISTRADOR', 'CONTABILISTA', 'AUDITOR'];
 // de Layout.tsx (RN010, UC004, UC010) — não inventadas de novo aqui.
 export const PERFIS_POR_ROTA: Record<string, Perfil[]> = {
   '/': TODOS,
-  '/upload-documentos': ['ADMINISTRADOR', 'CONTABILISTA'],
+  // Auditoria C02 (ver AnaliseController.java) — analisar/aprovar/rejeitar
+  // ficam reservados ao Contabilista; um Administrador que chegasse aqui
+  // conseguia fazer o upload (sem restrição própria) mas nunca passava do
+  // passo 1 — "2. Analisar" falhava sempre com 403, sem nenhuma explicação
+  // no ecrã (confirmado ao vivo: ver histórico desta sessão).
+  '/upload-documentos': ['CONTABILISTA'],
   '/documentos': TODOS,
   '/lancamentos': TODOS,
   '/lancamento-diario': ['ADMINISTRADOR', 'CONTABILISTA'],
